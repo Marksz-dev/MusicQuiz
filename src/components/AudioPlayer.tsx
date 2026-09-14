@@ -348,7 +348,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 const effectiveVolume = volumeRef.current;
                 event.target.setVolume(effectiveMuted ? 0 : effectiveVolume * 100);
                 event.target.seekTo(initialSec, true);
-                if (autoPlay || externalIsPlaying) {
+                if ((autoPlay || externalIsPlaying) && !synchronizedStartTime) {
                   event.target.playVideo();
                 }
               } catch (e) {
@@ -464,7 +464,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     audio.addEventListener('pause', onAudioPause);
     audio.addEventListener('ended', onAudioEnded);
 
-    if (autoPlay || externalIsPlaying) {
+    if ((autoPlay || externalIsPlaying) && !synchronizedStartTime) {
       audio.play().catch(() => {});
     }
 
@@ -523,12 +523,18 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   }, [externalIsPlaying, isYouTube]);
 
   // Synchronized playback trigger for multiplayer
+  const hasPlayedSyncRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!synchronizedStartTime) return;
+    if (hasPlayedSyncRef.current === synchronizedStartTime) return;
 
     let timeoutId: number | null = null;
 
     const playAtTime = () => {
+      if (hasPlayedSyncRef.current === synchronizedStartTime) return;
+      hasPlayedSyncRef.current = synchronizedStartTime;
+
       const now = Date.now();
       const expected = (now - synchronizedStartTime) / 1000;
       if (expected >= 0 && expected < 30) {
