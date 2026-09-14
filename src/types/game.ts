@@ -37,6 +37,7 @@ export interface Player {
   score: number;
   roundScore: number;
   hasGuessedCorrect: boolean;
+  hasSubmittedGuess?: boolean;
   guessTimeSeconds?: number;
   isHost: boolean;
   joinedAt: number;

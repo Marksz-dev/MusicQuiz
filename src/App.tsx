@@ -163,6 +163,7 @@ export default function App() {
     recentScorer,
     isSupabaseConnected,
     submitCorrectGuess,
+    submitSkipGuess,
     startNextRound,
     endRound,
     endGame,
@@ -197,10 +198,11 @@ export default function App() {
   };
 
   // Host: Advance to next round or trigger game over
-  const handleHostNextRound = () => {
+  const handleHostNextRound = useCallback(() => {
     if (!isHost) return;
 
-    const nextIndex = currentRoundIndexRef.current + 1;
+    const currentIdx = currentRoundPayload?.roundIndex ?? currentRoundIndexRef.current;
+    const nextIndex = currentIdx + 1;
     if (nextIndex <= roomSettings.totalRounds && matchPlaylistRef.current[nextIndex - 1]) {
       currentRoundIndexRef.current = nextIndex;
       startNextRound(
@@ -212,7 +214,7 @@ export default function App() {
       // All rounds completed -> Game Over Podium
       endGame(players);
     }
-  };
+  }, [isHost, currentRoundPayload?.roundIndex, roomSettings.totalRounds, startNextRound, endGame, players]);
 
   return (
     <div className="min-h-screen bg-zinc-900 text-white flex flex-col font-sans selection:bg-rose-500 selection:text-white overflow-x-hidden w-full max-w-full">
@@ -392,6 +394,7 @@ export default function App() {
                 revealedTrack={revealedTrack}
                 recentScorer={recentScorer}
                 onSubmitCorrectGuess={submitCorrectGuess}
+                onSubmitSkipGuess={submitSkipGuess}
                 onHostNextRound={handleHostNextRound}
                 onHostReturnToLobby={returnToLobby}
               />

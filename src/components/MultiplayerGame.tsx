@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Trophy,
   Flame,
   CheckCircle2,
+  XCircle,
   Volume2,
   Clock,
   Sparkles,
@@ -13,6 +14,8 @@ import {
   Medal,
   Zap,
   Youtube,
+  Timer,
+  ArrowRight,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Track, Player, RoundPayload, RoomStatus } from '../types/game';
@@ -35,6 +38,7 @@ export interface MultiplayerGameProps {
   revealedTrack: Track | null;
   recentScorer: { name: string; points: number } | null;
   onSubmitCorrectGuess: (guessText: string) => void;
+  onSubmitSkipGuess?: () => void;
   onHostNextRound: () => void;
   onHostReturnToLobby: () => void;
 }
@@ -53,10 +57,27 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
   revealedTrack,
   recentScorer,
   onSubmitCorrectGuess,
+  onSubmitSkipGuess,
   onHostNextRound,
   onHostReturnToLobby,
 }) => {
   const [guessFeedback, setGuessFeedback] = useState<string | null>(null);
+  const [revealCountdown, setRevealCountdown] = useState<number>(5);
+  const hasProgressedRoundRef = useRef<number | null>(null);
+  const onHostNextRoundRef = useRef(onHostNextRound);
+
+  // Keep latest reference to onHostNextRound without restarting timers
+  useEffect(() => {
+    onHostNextRoundRef.current = onHostNextRound;
+  }, [onHostNextRound]);
+
+  // Reset progression tracker whenever entering active play, countdown, or lobby
+  useEffect(() => {
+    if (roomStatus === 'playing' || roomStatus === 'countdown' || roomStatus === 'lobby') {
+      hasProgressedRoundRef.current = null;
+      setRevealCountdown(5);
+    }
+  }, [roomStatus]);
 
   // Trigger podium confetti when game concludes
   useEffect(() => {
@@ -70,6 +91,44 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
       } catch {}
     }
   }, [roomStatus]);
+
+  // Unified 5-second countdown timer on round reveal screen for ALL rounds (even and odd)
+  useEffect(() => {
+    if (roomStatus !== 'round_reveal' || !revealedTrack) {
+      return;
+    }
+
+    const currentRoundIdx = currentRoundPayload?.roundIndex ?? 1;
+    setRevealCountdown(5);
+
+    let remaining = 5;
+    const interval = window.setInterval(() => {
+      remaining -= 1;
+      setRevealCountdown(Math.max(0, remaining));
+
+      if (remaining <= 0) {
+        clearInterval(interval);
+        if (currentPlayer.isHost && hasProgressedRoundRef.current !== currentRoundIdx) {
+          hasProgressedRoundRef.current = currentRoundIdx;
+          onHostNextRoundRef.current();
+        }
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [roomStatus, revealedTrack, currentRoundPayload?.roundIndex, currentPlayer.isHost]);
+
+  // Host manual skip during reveal screen
+  const handleHostManualNextRound = () => {
+    if (!currentPlayer.isHost) return;
+    const currentRoundIdx = currentRoundPayload?.roundIndex ?? 1;
+    if (hasProgressedRoundRef.current !== currentRoundIdx) {
+      hasProgressedRoundRef.current = currentRoundIdx;
+      onHostNextRoundRef.current();
+    }
+  };
 
   // Handle local player guess submission
   const handleGuessSubmit = (guessText: string) => {
@@ -110,45 +169,95 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
     );
   }
 
-  // 2. ROUND REVEAL SCREEN
+  // 2. ROUND REVEAL SCREEN (5-Second Transition with Audio Stopped)
   if (roomStatus === 'round_reveal' && revealedTrack) {
-    const sortedRoundPlayers = [...players].sort((a, b) => b.score - a.score);
-    const roundWinner = sortedRoundPlayers.find((p) => p.hasGuessedCorrect);
+    const isFinalRound =
+      currentRoundPayload &&
+      currentRoundPayload.roundIndex >= currentRoundPayload.totalRounds;
+
+    const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+
+    // Personal result calculation
+    const myPlayer = players.find((p) => p.id === currentPlayer.id) || currentPlayer;
+    const didSolve = myPlayer.hasGuessedCorrect || (hasGuessedCorrect && (myPlayer.roundScore ?? 0) > 0);
+    const roundPtsEarned = myPlayer.roundScore ?? 0;
 
     return (
-      <div className="w-full max-w-3xl mx-auto px-4 py-6 flex flex-col items-center gap-6">
-        <div className="w-full bg-zinc-800 border border-zinc-700 rounded-2xl p-6 shadow-xl flex flex-col items-center text-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 text-xs font-bold uppercase tracking-wider border border-purple-500/40">
-            <Sparkles className="w-3.5 h-3.5 text-rose-400" />
-            Round {currentRoundPayload?.roundIndex} Complete
+      <div className="w-full max-w-2xl mx-auto px-4 py-4 sm:py-6 flex flex-col items-center gap-5">
+        {/* Visible 5-second Countdown Header */}
+        <div className="w-full bg-zinc-800 border border-zinc-700 rounded-2xl p-4 shadow-xl flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Timer className="w-4 h-4 text-rose-400 animate-spin" />
+              <span className="text-sm sm:text-base font-bold text-white">
+                {isFinalRound
+                  ? `Final podium in ${revealCountdown}s...`
+                  : `Next round in ${revealCountdown}s...`}
+              </span>
+            </div>
+
+            {/* Host Skip Button */}
+            {currentPlayer.isHost && (
+              <button
+                id="host-skip-reveal-btn"
+                onClick={handleHostManualNextRound}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 hover:text-rose-200 border border-rose-500/40 rounded-lg text-xs font-bold transition-all cursor-pointer"
+              >
+                <span>{isFinalRound ? 'View Podium Now' : 'Next Round Now'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          <div className="flex flex-col items-center gap-3">
+          {/* 5-second Animated Progress Bar */}
+          <div className="w-full bg-zinc-900 rounded-full h-2 overflow-hidden border border-zinc-700/60">
+            <div
+              className="bg-gradient-to-r from-rose-500 to-orange-400 h-full rounded-full transition-all duration-1000 ease-linear"
+              style={{ width: `${Math.max(0, (revealCountdown / 5) * 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Recap Card */}
+        <div className="w-full bg-zinc-800 border border-zinc-700 rounded-2xl p-5 sm:p-6 shadow-xl flex flex-col items-center gap-5">
+          {/* Round Pill */}
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 text-xs font-bold uppercase tracking-wider border border-purple-500/40">
+            <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+            Round {currentRoundPayload?.roundIndex || 1} Recap
+          </div>
+
+          {/* Track Artwork, Title & Artist */}
+          <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left w-full">
             {revealedTrack.artworkUrl ? (
               <img
                 src={revealedTrack.artworkUrl}
                 alt={revealedTrack.title}
                 referrerPolicy="no-referrer"
-                className="w-32 h-32 rounded-2xl shadow-xl object-cover border border-zinc-700"
+                className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl shadow-xl object-cover border border-zinc-700 shrink-0"
               />
             ) : (
-              <div className="w-32 h-32 rounded-2xl bg-zinc-900 flex items-center justify-center text-zinc-500">
+              <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl bg-zinc-900 flex items-center justify-center text-zinc-500 shrink-0">
                 <Music className="w-12 h-12" />
               </div>
             )}
 
-            <div>
-              <h3 className="text-2xl font-black text-white tracking-tight">
+            <div className="flex-1 min-w-0">
+              <span className="text-[11px] uppercase tracking-wider font-bold text-zinc-400 font-mono">
+                The Song Was
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate mt-0.5">
                 {revealedTrack.title}
               </h3>
-              <p className="text-rose-400 text-lg font-semibold">
+              <p className="text-rose-400 text-base sm:text-lg font-semibold truncate">
                 {revealedTrack.artist}
               </p>
-              <p className="text-zinc-400 text-xs mt-0.5">
-                Album: {revealedTrack.album} {revealedTrack.releaseDate ? `(${revealedTrack.releaseDate})` : ''}
+              <p className="text-zinc-400 text-xs mt-1">
+                Album: {revealedTrack.album || 'Unknown Album'}{' '}
+                {revealedTrack.releaseDate ? `(${revealedTrack.releaseDate})` : ''}
               </p>
+
               {revealedTrack.source === 'youtube' && (
-                <div className="mt-2 flex items-center justify-center">
+                <div className="mt-2.5">
                   <a
                     href={revealedTrack.previewUrl}
                     target="_blank"
@@ -162,56 +271,101 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
             </div>
           </div>
 
-          {/* Winner Banner */}
-          {roundWinner ? (
-            <div className="w-full py-2.5 px-4 bg-purple-500/20 border border-purple-500/40 rounded-xl flex items-center justify-center gap-2 text-purple-200 text-sm font-semibold">
-              <Trophy className="w-4 h-4 text-purple-400" />
-              <span>
-                Fastest Guess: <strong>{roundWinner.name}</strong> (+{roundWinner.roundScore} pts)
-              </span>
-            </div>
-          ) : (
-            <div className="w-full py-2.5 px-4 bg-zinc-900 rounded-xl text-zinc-400 text-xs border border-zinc-700">
-              No one guessed this track in time!
-            </div>
-          )}
-
-          {/* Full Audio Player to enjoy */}
-          <div className="w-full max-w-md pt-2">
-            <AudioPlayer
-              previewUrl={revealedTrack.previewUrl}
-              source={revealedTrack.source}
-              youtubeId={revealedTrack.youtubeId}
-              isPlaying={true}
-              showEqualizer={false}
-              showControls={true}
-            />
+          {/* Personal Result Indicator */}
+          <div className="w-full">
+            {didSolve && roundPtsEarned > 0 ? (
+              <div className="w-full flex items-center justify-between p-3.5 sm:p-4 bg-emerald-500/15 border border-emerald-500/40 rounded-xl text-emerald-300">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-bold text-sm sm:text-base text-white">
+                      Correct! +{roundPtsEarned.toLocaleString()} points
+                    </div>
+                    <div className="text-xs text-emerald-300/80">
+                      {myPlayer.guessTimeSeconds
+                        ? `Solved in ${myPlayer.guessTimeSeconds}s`
+                        : 'Points locked in!'}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right font-mono font-black text-lg sm:text-xl text-emerald-400">
+                  +{roundPtsEarned}
+                </div>
+              </div>
+            ) : (
+              <div className="w-full flex items-center justify-between p-3.5 sm:p-4 bg-zinc-900/90 border border-zinc-700/80 rounded-xl text-zinc-300">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-rose-500/20 flex items-center justify-center shrink-0">
+                    <XCircle className="w-5 h-5 text-rose-400" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-bold text-sm sm:text-base text-zinc-200">
+                      Wrong / Time out! 0 points
+                    </div>
+                    <div className="text-xs text-zinc-400">
+                      Ready for the next round!
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right font-mono font-bold text-base sm:text-lg text-zinc-500">
+                  0 pts
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Host Next Round Button */}
-          {currentPlayer.isHost ? (
-            <button
-              id="game-host-next-round-btn"
-              onClick={onHostNextRound}
-              className="flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-rose-500 to-orange-400 hover:from-rose-400 hover:to-orange-300 text-white font-black rounded-xl shadow-lg shadow-rose-950/40 active:scale-95 transition-all cursor-pointer"
-            >
-              <span>Next Round</span>
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          ) : (
-            <p className="text-xs text-zinc-400 font-mono">
-              Waiting for host to trigger the next track...
-            </p>
-          )}
-        </div>
+          {/* Updated Mini Leaderboard */}
+          <div className="w-full flex flex-col gap-2 pt-2 border-t border-zinc-700/60">
+            <div className="flex items-center justify-between text-xs uppercase tracking-wider font-bold text-zinc-400 px-1">
+              <span className="flex items-center gap-1.5">
+                <Trophy className="w-3.5 h-3.5 text-purple-400" /> Room Standings
+              </span>
+              <span>Points</span>
+            </div>
 
-        {/* Interim Leaderboard */}
-        <div className="w-full max-w-xl">
-          <Leaderboard
-            players={players}
-            currentUserId={currentPlayer.id}
-            showRoundStatus={false}
-          />
+            <div className="flex flex-col gap-1.5">
+              {sortedPlayers.map((player, idx) => {
+                const isMe = player.id === currentPlayer.id;
+                return (
+                  <div
+                    key={player.id}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl border text-xs sm:text-sm transition-all ${
+                      isMe
+                        ? 'bg-purple-950/40 border-purple-500/50 text-white'
+                        : 'bg-zinc-900/60 border-zinc-700/60 text-zinc-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-4 text-center font-mono font-bold text-zinc-400 text-xs">
+                        #{idx + 1}
+                      </span>
+                      <span className="text-base">{player.avatar}</span>
+                      <span className="font-semibold truncate max-w-[120px] sm:max-w-[180px]">
+                        {player.name} {isMe && <span className="text-purple-300 text-[11px]">(You)</span>}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {player.roundScore > 0 ? (
+                        <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded">
+                          +{player.roundScore}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-mono text-zinc-500">
+                          +0
+                        </span>
+                      )}
+                      <span className="font-mono font-bold text-white min-w-[55px] text-right">
+                        {player.score.toLocaleString()} pts
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -407,20 +561,36 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
                 <div>
                   <div className="text-base sm:text-lg">Solved! Points Locked In!</div>
                   <div className="text-xs font-medium text-green-300/80 mt-0.5">
-                    Sit back and enjoy the track while other players finish guessing.
+                    Sit back while other players finish guessing or round ends.
                   </div>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                <AutocompleteInput
-                  onSelectTrack={(t) => handleGuessSubmit(`${t.title} - ${t.artist}`)}
-                  onSubmitGuess={handleGuessSubmit}
-                  disabled={hasGuessedCorrect || roundTimeRemaining <= 0}
-                  placeholder="Type song title or artist..."
-                  autoFocus={true}
-                  genreId={currentRoundPayload?.track?.category}
-                />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <AutocompleteInput
+                      onSelectTrack={(t) => handleGuessSubmit(`${t.title} - ${t.artist}`)}
+                      onSubmitGuess={handleGuessSubmit}
+                      disabled={hasGuessedCorrect || roundTimeRemaining <= 0}
+                      placeholder="Type song title or artist..."
+                      autoFocus={true}
+                      genreId={currentRoundPayload?.track?.category}
+                    />
+                  </div>
+                  {onSubmitSkipGuess && (
+                    <button
+                      type="button"
+                      id="game-pass-round-btn"
+                      onClick={onSubmitSkipGuess}
+                      disabled={hasGuessedCorrect || roundTimeRemaining <= 0}
+                      className="px-3.5 py-3 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-300 hover:text-white text-xs font-bold rounded-xl border border-zinc-700 transition-all cursor-pointer shrink-0 disabled:opacity-50"
+                      title="Pass / Give Up this round (0 points)"
+                    >
+                      Pass
+                    </button>
+                  )}
+                </div>
 
                 {guessFeedback && (
                   <div

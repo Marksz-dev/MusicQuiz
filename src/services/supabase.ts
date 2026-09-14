@@ -1,8 +1,18 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export function getSavedSupabaseConfig(): { url: string; key: string } {
-  const envUrl = ((import.meta as any).env?.VITE_SUPABASE_URL || '').trim();
+  let envUrl = ((import.meta as any).env?.VITE_SUPABASE_URL || '').trim();
   const envKey = ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '').trim();
+
+  // Normalize project URL: Supabase client requires root domain (e.g. https://xxx.supabase.co)
+  // Strips any accidental /rest/v1/ or trailing slashes copied from Supabase dashboard
+  if (envUrl) {
+    try {
+      envUrl = new URL(envUrl).origin;
+    } catch {
+      envUrl = envUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+    }
+  }
 
   return {
     url: envUrl,

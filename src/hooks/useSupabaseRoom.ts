@@ -24,7 +24,20 @@ export function useSupabaseRoom({
   onRoundEnd,
   onGameOver,
 }: UseSupabaseRoomProps) {
-  const [players, setPlayers] = useState<Player[]>([]);
+  const initialPlayer: Player = {
+    id: currentPlayer.id,
+    name: currentPlayer.name,
+    avatar: currentPlayer.avatar,
+    color: currentPlayer.color,
+    score: 0,
+    roundScore: 0,
+    hasGuessedCorrect: false,
+    hasSubmittedGuess: false,
+    isHost: currentPlayer.isHost,
+    joinedAt: Date.now(),
+  };
+
+  const [players, setPlayers] = useState<Player[]>([initialPlayer]);
   const [roomStatus, setRoomStatus] = useState<RoomStatus>('lobby');
   const [currentRoundPayload, setCurrentRoundPayload] = useState<RoundPayload | null>(null);
   const [myScore, setMyScore] = useState<number>(0);
@@ -39,8 +52,27 @@ export function useSupabaseRoom({
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const isSubscribedRef = useRef<boolean>(false);
+  const pendingMessagesRef = useRef<Array<{ event: string; payload: any }>>([]);
   const timerIntervalRef = useRef<number | null>(null);
   const countdownIntervalRef = useRef<number | null>(null);
+
+  const isHostRef = useRef<boolean>(currentPlayer.isHost);
+  const currentRoundPayloadRef = useRef<RoundPayload | null>(null);
+  const roundActiveRef = useRef<boolean>(false);
+  const playersRef = useRef<Player[]>([initialPlayer]);
+
+  useEffect(() => {
+    isHostRef.current = currentPlayer.isHost;
+  }, [currentPlayer.isHost]);
+
+  useEffect(() => {
+    currentRoundPayloadRef.current = currentRoundPayload;
+  }, [currentRoundPayload]);
+
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
 
   // Initialize and update local player in the roster
   const selfPlayer: Player = {
@@ -55,26 +87,6 @@ export function useSupabaseRoom({
     joinedAt: Date.now(),
   };
 
-  // Helper to send broadcast messages (via Supabase Realtime OR local BroadcastChannel)
-  const broadcastMessage = useCallback(
-    (event: string, payload: any) => {
-      // 1. Supabase Broadcast
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event,
-          payload,
-        });
-      }
-
-      // 2. BroadcastChannel for local/multi-tab fallback
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.postMessage({ event, payload });
-      }
-    },
-    []
-  );
-
   // Clean timer loops
   const clearTimers = useCallback(() => {
     if (timerIntervalRef.current) {
@@ -86,6 +98,126 @@ export function useSupabaseRoom({
       countdownIntervalRef.current = null;
     }
   }, []);
+
+  // Helper to send broadcast messages (via Supabase Realtime OR local BroadcastChannel)
+  const broadcastMessage = useCallback(
+    (event: string, payload: any) => {
+      // 1. Supabase Broadcast: Only send over WebSocket when state is joined to prevent REST fallback warnings
+      if (channelRef.current) {
+        if (channelRef.current.state === 'joined') {
+          channelRef.current
+            .send({
+              type: 'broadcast',
+              event,
+              payload,
+            })
+            .catch((err) => {
+              console.warn('Supabase broadcast send error:', err);
+            });
+        } else {
+          // Channel is still subscribing or reconnecting; buffer message
+          pendingMessagesRef.current.push({ event, payload });
+        }
+      }
+
+      // 2. BroadcastChannel for local/multi-tab fallback
+      if (broadcastChannelRef.current) {
+        try {
+          broadcastChannelRef.current.postMessage({ event, payload });
+        } catch (e) {
+          console.warn('BroadcastChannel postMessage error:', e);
+        }
+      }
+    },
+    []
+  );
+
+  // Host: End round and show reveal screen
+  const endRound = useCallback(
+    (track: Track) => {
+      if (!isHostRef.current) return;
+
+      roundActiveRef.current = false;
+      clearTimers();
+
+      setRoomStatus('round_reveal');
+      setRevealedTrack(track);
+
+      // Snapshot latest player scores
+      const scoreMap: Record<string, number> = {};
+      playersRef.current.forEach((p) => {
+        scoreMap[p.id] = p.score;
+      });
+
+      broadcastMessage('ROUND_END', {
+        track,
+        scores: scoreMap,
+      });
+
+      if (onRoundEnd) {
+        onRoundEnd(track, scoreMap);
+      }
+    },
+    [clearTimers, broadcastMessage, onRoundEnd]
+  );
+
+  // Check whether all active players have finished their turn (guessed correctly or passed); if so, end the round immediately
+  const checkAndEndRoundIfAllGuessed = useCallback(
+    (currentRoster: Player[]) => {
+      if (!isHostRef.current) return;
+      if (!roundActiveRef.current && roomStatus !== 'playing') return;
+
+      const track = currentRoundPayloadRef.current?.track;
+      if (!track) return;
+
+      const activeList = currentRoster.length > 0 ? currentRoster : playersRef.current;
+      if (activeList.length === 0) return;
+
+      const allDone = activeList.every(
+        (p) => p.hasGuessedCorrect || p.hasSubmittedGuess
+      );
+
+      if (allDone) {
+        roundActiveRef.current = false;
+        clearTimers();
+        endRound(track);
+      }
+    },
+    [clearTimers, endRound, roomStatus]
+  );
+
+  // Client-side decaying score calculation synchronized to round startTime
+  const startRoundTimer = useCallback((payload: RoundPayload) => {
+    clearTimers();
+    roundActiveRef.current = true;
+    currentRoundPayloadRef.current = payload;
+
+    const checkInterval = 50; // High precision 50ms interval for score decay
+    const duration = payload.duration || 30;
+
+    timerIntervalRef.current = window.setInterval(() => {
+      const now = Date.now();
+      const elapsedSeconds = Math.max(0, (now - payload.startTime) / 1000);
+      const remaining = Math.max(0, duration - elapsedSeconds);
+
+      setRoundTimeRemaining(Math.ceil(remaining));
+
+      // Decaying Score formula: starts at 1000, decays linearly over 30s
+      if (remaining <= 0) {
+        setAvailableScore(0);
+        clearTimers();
+        // TRIGGER 1: Round End on 30s timeout
+        if (isHostRef.current && roundActiveRef.current) {
+          roundActiveRef.current = false;
+          endRound(payload.track);
+        }
+      } else {
+        const decayFactor = remaining / duration;
+        const currentDecayedScore = Math.max(100, Math.round(1000 * decayFactor));
+        setAvailableScore(currentDecayedScore);
+      }
+    }, checkInterval);
+  }, [clearTimers, endRound]);
 
   // Handle incoming broadcast events uniformly
   const handleBroadcastEvent = useCallback(
@@ -101,6 +233,19 @@ export function useSupabaseRoom({
           setAvailableScore(1000);
           setRevealedTrack(null);
           setCurrentRoundPayload(payload);
+          currentRoundPayloadRef.current = payload;
+          roundActiveRef.current = false;
+
+          // Reset all players' round state for the new round, preserving cumulative score
+          const resetList = playersRef.current.map((p) => ({
+            ...p,
+            roundScore: 0,
+            hasGuessedCorrect: false,
+            hasSubmittedGuess: false,
+            guessTimeSeconds: undefined,
+          }));
+          playersRef.current = resetList;
+          setPlayers(resetList);
 
           // Local countdown tick
           let cd = 3;
@@ -123,27 +268,85 @@ export function useSupabaseRoom({
           setRecentScorer({ name: scoreEvent.playerName, points: scoreEvent.pointsAwarded });
           setTimeout(() => setRecentScorer(null), 3000);
 
-          setPlayers((prev) =>
-            prev.map((p) => {
-              if (p.id === scoreEvent.playerId) {
-                return {
-                  ...p,
-                  score: p.score + scoreEvent.pointsAwarded,
+          const prev = playersRef.current;
+          const found = prev.some((p) => p.id === scoreEvent.playerId);
+          const updated = found
+            ? prev.map((p) => {
+                if (p.id === scoreEvent.playerId) {
+                  return {
+                    ...p,
+                    score: Math.max(p.score, scoreEvent.totalScore),
+                    roundScore: scoreEvent.pointsAwarded,
+                    hasGuessedCorrect: true,
+                    hasSubmittedGuess: true,
+                    guessTimeSeconds: scoreEvent.guessTimeSeconds,
+                  };
+                }
+                return p;
+              })
+            : [
+                ...prev,
+                {
+                  id: scoreEvent.playerId,
+                  name: scoreEvent.playerName,
+                  avatar: '🎵',
+                  color: '#8b5cf6',
+                  score: scoreEvent.totalScore,
                   roundScore: scoreEvent.pointsAwarded,
                   hasGuessedCorrect: true,
+                  hasSubmittedGuess: true,
                   guessTimeSeconds: scoreEvent.guessTimeSeconds,
-                };
-              }
-              return p;
-            })
-          );
+                  isHost: false,
+                  joinedAt: Date.now(),
+                },
+              ];
+
+          playersRef.current = updated;
+          setPlayers(updated);
+
+          // Check if all active players have now guessed or submitted
+          checkAndEndRoundIfAllGuessed(updated);
+          break;
+        }
+
+        case 'PLAYER_SKIPPED': {
+          const skipEvent = payload as PlayerScoreEvent;
+          const prev = playersRef.current;
+          const updated = prev.map((p) => {
+            if (p.id === skipEvent.playerId) {
+              return {
+                ...p,
+                roundScore: 0,
+                hasGuessedCorrect: false,
+                hasSubmittedGuess: true,
+              };
+            }
+            return p;
+          });
+
+          playersRef.current = updated;
+          setPlayers(updated);
+
+          // Check if all active players have now submitted a guess
+          checkAndEndRoundIfAllGuessed(updated);
           break;
         }
 
         case 'ROUND_END': {
           clearTimers();
+          roundActiveRef.current = false;
           setRoomStatus('round_reveal');
           setRevealedTrack(payload.track);
+          if (payload.scores) {
+            setPlayers((prev) => {
+              const updated = prev.map((p) => ({
+                ...p,
+                score: payload.scores[p.id] !== undefined ? Math.max(p.score, payload.scores[p.id]) : p.score,
+              }));
+              playersRef.current = updated;
+              return updated;
+            });
+          }
           if (onRoundEnd) {
             onRoundEnd(payload.track, payload.scores || {});
           }
@@ -152,27 +355,36 @@ export function useSupabaseRoom({
 
         case 'GAME_OVER': {
           clearTimers();
+          roundActiveRef.current = false;
           setRoomStatus('game_over');
+          if (payload.finalPlayers && payload.finalPlayers.length > 0) {
+            setPlayers(payload.finalPlayers);
+            playersRef.current = payload.finalPlayers;
+          }
           if (onGameOver) {
-            onGameOver(payload.finalPlayers || []);
+            onGameOver(payload.finalPlayers || playersRef.current);
           }
           break;
         }
 
         case 'RETURN_TO_LOBBY': {
           clearTimers();
+          roundActiveRef.current = false;
           setRoomStatus('lobby');
           setCurrentRoundPayload(null);
           setRevealedTrack(null);
           setHasGuessedCorrect(false);
-          setPlayers((prev) =>
-            prev.map((p) => ({
+          setPlayers((prev) => {
+            const updated = prev.map((p) => ({
               ...p,
               score: 0,
               roundScore: 0,
               hasGuessedCorrect: false,
-            }))
-          );
+              hasSubmittedGuess: false,
+            }));
+            playersRef.current = updated;
+            return updated;
+          });
           setMyScore(0);
           break;
         }
@@ -181,46 +393,25 @@ export function useSupabaseRoom({
           break;
       }
     },
-    [clearTimers, onRoundStart, onRoundEnd, onGameOver]
+    [clearTimers, onRoundStart, onRoundEnd, onGameOver, startRoundTimer, endRound]
   );
-
-  // Client-side decaying score calculation synchronized to round startTime
-  const startRoundTimer = useCallback((payload: RoundPayload) => {
-    clearTimers();
-
-    const checkInterval = 50; // High precision 50ms interval for ultra-smooth score decay
-    const duration = payload.duration || 30;
-
-    timerIntervalRef.current = window.setInterval(() => {
-      const now = Date.now();
-      const elapsedSeconds = Math.max(0, (now - payload.startTime) / 1000);
-      const remaining = Math.max(0, duration - elapsedSeconds);
-
-      setRoundTimeRemaining(Math.ceil(remaining));
-
-      // Decaying Score formula:
-      // Starts at 1000, decays linearly over 30s. Minimum score 100 if solved in time.
-      if (remaining <= 0) {
-        setAvailableScore(0);
-        clearTimers();
-      } else {
-        // Linear decay: 1000 -> 100 points
-        const decayFactor = remaining / duration;
-        const currentDecayedScore = Math.max(100, Math.round(1000 * decayFactor));
-        setAvailableScore(currentDecayedScore);
-      }
-    }, checkInterval);
-  }, [clearTimers]);
 
   // Connect to Supabase Realtime channel + Fallback BroadcastChannel
   useEffect(() => {
     if (!roomCode) return;
 
+    // Immediately put self into players roster
+    setPlayers((prev) => {
+      if (!prev.some((p) => p.id === currentPlayer.id)) {
+        return [selfPlayer];
+      }
+      return prev;
+    });
+
     const supabase = getSupabaseClient();
     let channel: RealtimeChannel | null = null;
 
     if (supabase) {
-      setIsSupabaseConnected(true);
       const channelName = `songspot_room_${roomCode.toUpperCase()}`;
 
       channel = supabase.channel(channelName, {
@@ -229,7 +420,7 @@ export function useSupabaseRoom({
             key: currentPlayer.id,
           },
           broadcast: {
-            self: true, // receive own events for clean centralized state flow
+            self: false,
           },
         },
       });
@@ -259,7 +450,28 @@ export function useSupabaseRoom({
                 }
               });
             });
-            setPlayers(roster);
+
+            // Ensure self is in the roster even if presence state is momentarily empty
+            if (!roster.some((r) => r.id === currentPlayer.id)) {
+              roster.push(selfPlayer);
+            }
+
+            // Merge with existing players to preserve live round scores and guess states
+            const updated = roster.map((p) => {
+              const existing = playersRef.current.find((x) => x.id === p.id);
+              if (!existing) return p;
+              return {
+                ...p,
+                score: Math.max(p.score, existing.score),
+                roundScore: existing.roundScore !== undefined ? existing.roundScore : p.roundScore,
+                hasGuessedCorrect: existing.hasGuessedCorrect || p.hasGuessedCorrect || false,
+                hasSubmittedGuess: existing.hasSubmittedGuess || p.hasSubmittedGuess || false,
+                guessTimeSeconds: existing.guessTimeSeconds || p.guessTimeSeconds,
+              };
+            });
+            playersRef.current = updated;
+            setPlayers(updated);
+            checkAndEndRoundIfAllGuessed(updated);
           }
         })
         .on('presence', { event: 'join' }, ({ newPresences }) => {
@@ -275,17 +487,44 @@ export function useSupabaseRoom({
       });
 
       // Subscribe and track presence
-      channel.subscribe(async (status) => {
+      channel.subscribe(async (status, err) => {
         if (status === 'SUBSCRIBED') {
-          await channel?.track({
-            id: currentPlayer.id,
-            name: currentPlayer.name,
-            avatar: currentPlayer.avatar,
-            color: currentPlayer.color,
-            isHost: currentPlayer.isHost,
-            score: myScore,
-            joinedAt: Date.now(),
-          });
+          isSubscribedRef.current = true;
+          setIsSupabaseConnected(true);
+          try {
+            await channel?.track({
+              id: currentPlayer.id,
+              name: currentPlayer.name,
+              avatar: currentPlayer.avatar,
+              color: currentPlayer.color,
+              isHost: currentPlayer.isHost,
+              score: myScore,
+              joinedAt: Date.now(),
+            });
+          } catch (trackErr) {
+            console.warn('Error tracking presence:', trackErr);
+          }
+
+          // Flush any broadcast messages that were queued while subscribing
+          while (pendingMessagesRef.current.length > 0) {
+            const msg = pendingMessagesRef.current.shift();
+            if (msg) {
+              channel?.send({
+                type: 'broadcast',
+                event: msg.event,
+                payload: msg.payload,
+              }).catch((sendErr) => console.warn('Flush send error:', sendErr));
+            }
+          }
+        } else if (status === 'CHANNEL_ERROR') {
+          console.warn('Supabase channel subscription error:', err);
+          isSubscribedRef.current = false;
+          setIsSupabaseConnected(false);
+        } else if (status === 'TIMED_OUT') {
+          console.warn('Supabase channel subscription timed out');
+          isSubscribedRef.current = false;
+        } else if (status === 'CLOSED') {
+          isSubscribedRef.current = false;
         }
       });
     } else {
@@ -295,6 +534,8 @@ export function useSupabaseRoom({
     // 3. Fallback / Cross-Tab BroadcastChannel
     // Enables multi-tab or local party testing without Supabase credentials
     let bc: BroadcastChannel | null = null;
+    let heartbeatInterval: number | null = null;
+
     try {
       bc = new BroadcastChannel(`songspot_channel_${roomCode.toUpperCase()}`);
       broadcastChannelRef.current = bc;
@@ -304,43 +545,50 @@ export function useSupabaseRoom({
           handleBroadcastEvent(event.data.event, event.data.payload);
         }
         if (event.data?.type === 'HEARTBEAT') {
-          // Update peers in fallback mode
           const peer = event.data.player as Player;
+          if (peer.id === currentPlayer.id) return;
           setPlayers((prev) => {
-            if (!prev.some((p) => p.id === peer.id)) {
-              return [...prev, peer];
+            const existing = prev.find((p) => p.id === peer.id);
+            if (!existing) {
+              const updated = [...prev, peer];
+              playersRef.current = updated;
+              return updated;
             }
-            return prev.map((p) => (p.id === peer.id ? { ...p, ...peer } : p));
+            const updated = prev.map((p) =>
+              p.id === peer.id
+                ? {
+                    ...p,
+                    name: peer.name,
+                    avatar: peer.avatar,
+                    color: peer.color,
+                    isHost: peer.isHost,
+                    score: Math.max(p.score, peer.score),
+                  }
+                : p
+            );
+            playersRef.current = updated;
+            return updated;
           });
         }
       };
 
       // Periodic heartbeat for presence in BroadcastChannel mode
-      const heartbeatInterval = setInterval(() => {
+      heartbeatInterval = window.setInterval(() => {
         bc?.postMessage({
           type: 'HEARTBEAT',
           player: selfPlayer,
         });
       }, 1500);
-
-      // Add self immediately to local players
-      setPlayers((prev) => {
-        if (!prev.some((p) => p.id === selfPlayer.id)) {
-          return [...prev, selfPlayer];
-        }
-        return prev;
-      });
-
-      return () => {
-        clearInterval(heartbeatInterval);
-        bc?.close();
-      };
     } catch (e) {
       console.warn('BroadcastChannel not supported:', e);
     }
 
     return () => {
       clearTimers();
+      isSubscribedRef.current = false;
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+      }
       if (channel) {
         channel.unsubscribe();
       }
@@ -358,10 +606,11 @@ export function useSupabaseRoom({
       const now = Date.now();
       const elapsedSeconds = Math.max(0, (now - currentRoundPayload.startTime) / 1000);
       const guessTime = Number(elapsedSeconds.toFixed(2));
-      const pointsWon = availableScore;
+      const pointsWon = Math.max(100, availableScore);
+      const newTotalScore = myScore + pointsWon;
 
       setHasGuessedCorrect(true);
-      setMyScore((prev) => prev + pointsWon);
+      setMyScore(newTotalScore);
 
       const scorePayload: PlayerScoreEvent = {
         playerId: currentPlayer.id,
@@ -369,26 +618,68 @@ export function useSupabaseRoom({
         roundIndex: currentRoundPayload.roundIndex,
         pointsAwarded: pointsWon,
         guessTimeSeconds: guessTime,
-        totalScore: myScore + pointsWon,
+        totalScore: newTotalScore,
       };
 
+      // Show recent scorer toast locally
+      setRecentScorer({ name: currentPlayer.name, points: pointsWon });
+      setTimeout(() => setRecentScorer(null), 3000);
+
+      // Broadcast to remote peers
       broadcastMessage('PLAYER_GUESSED', scorePayload);
 
-      // Check if all players have now guessed correctly
-      // (host will end the round early if all participants have completed)
-      if (currentPlayer.isHost) {
-        setTimeout(() => {
-          setPlayers((latestPlayers) => {
-            const allFinished = latestPlayers.every(
-              (p) => p.id === currentPlayer.id || p.hasGuessedCorrect
-            );
-            if (allFinished && latestPlayers.length > 1) {
-              endRound(currentRoundPayload.track);
-            }
-            return latestPlayers;
-          });
-        }, 500);
+      // Update presence with the new score
+      if (channelRef.current && channelRef.current.state === 'joined') {
+        channelRef.current.track({
+          id: currentPlayer.id,
+          name: currentPlayer.name,
+          avatar: currentPlayer.avatar,
+          color: currentPlayer.color,
+          isHost: currentPlayer.isHost,
+          score: newTotalScore,
+          joinedAt: Date.now(),
+        }).catch(() => {});
       }
+
+      // Update local players state immediately for the live scoreboard
+      const prev = playersRef.current;
+      const found = prev.some((p) => p.id === currentPlayer.id);
+      const updated = found
+        ? prev.map((p) => {
+            if (p.id === currentPlayer.id) {
+              return {
+                ...p,
+                score: newTotalScore,
+                roundScore: pointsWon,
+                hasGuessedCorrect: true,
+                hasSubmittedGuess: true,
+                guessTimeSeconds: guessTime,
+              };
+            }
+            return p;
+          })
+        : [
+            ...prev,
+            {
+              id: currentPlayer.id,
+              name: currentPlayer.name,
+              avatar: currentPlayer.avatar,
+              color: currentPlayer.color,
+              score: newTotalScore,
+              roundScore: pointsWon,
+              hasGuessedCorrect: true,
+              hasSubmittedGuess: true,
+              guessTimeSeconds: guessTime,
+              isHost: currentPlayer.isHost,
+              joinedAt: Date.now(),
+            },
+          ];
+
+      playersRef.current = updated;
+      setPlayers(updated);
+
+      // Instantly evaluate whether all active players have guessed
+      checkAndEndRoundIfAllGuessed(updated);
     },
     [
       hasGuessedCorrect,
@@ -397,18 +688,87 @@ export function useSupabaseRoom({
       availableScore,
       currentPlayer.id,
       currentPlayer.name,
+      currentPlayer.avatar,
+      currentPlayer.color,
       currentPlayer.isHost,
       myScore,
       broadcastMessage,
+      checkAndEndRoundIfAllGuessed,
     ]
   );
+
+  // Submit skip (give up on current round)
+  const submitSkipGuess = useCallback(() => {
+    if (hasGuessedCorrect || roomStatus !== 'playing' || !currentRoundPayload) return;
+
+    setHasGuessedCorrect(false);
+
+    const skipPayload: PlayerScoreEvent = {
+      playerId: currentPlayer.id,
+      playerName: currentPlayer.name,
+      roundIndex: currentRoundPayload.roundIndex,
+      pointsAwarded: 0,
+      guessTimeSeconds: 30,
+      totalScore: myScore,
+    };
+
+    broadcastMessage('PLAYER_SKIPPED', skipPayload);
+
+    const prev = playersRef.current;
+    const found = prev.some((p) => p.id === currentPlayer.id);
+    const updated = found
+      ? prev.map((p) => {
+          if (p.id === currentPlayer.id) {
+            return {
+              ...p,
+              roundScore: 0,
+              hasGuessedCorrect: false,
+              hasSubmittedGuess: true,
+            };
+          }
+          return p;
+        })
+      : [
+          ...prev,
+          {
+            id: currentPlayer.id,
+            name: currentPlayer.name,
+            avatar: currentPlayer.avatar,
+            color: currentPlayer.color,
+            score: myScore,
+            roundScore: 0,
+            hasGuessedCorrect: false,
+            hasSubmittedGuess: true,
+            isHost: currentPlayer.isHost,
+            joinedAt: Date.now(),
+          },
+        ];
+
+    playersRef.current = updated;
+    setPlayers(updated);
+
+    // Instantly evaluate whether all active players have guessed/passed
+    checkAndEndRoundIfAllGuessed(updated);
+  }, [
+    hasGuessedCorrect,
+    roomStatus,
+    currentRoundPayload,
+    currentPlayer.id,
+    currentPlayer.name,
+    currentPlayer.avatar,
+    currentPlayer.color,
+    currentPlayer.isHost,
+    myScore,
+    broadcastMessage,
+    checkAndEndRoundIfAllGuessed,
+  ]);
 
   // Host: Prepare and start next round
   const startNextRound = useCallback(
     (roundIndex: number, totalRounds: number, track: Track) => {
-      if (!currentPlayer.isHost) return;
+      if (!isHostRef.current) return;
 
-      // Start time is set 3.5 seconds into the future for countdown buffer
+      // Start time is set 3.2 seconds into the future for countdown buffer
       const startTime = Date.now() + 3200;
       const payload: RoundPayload = {
         roundIndex,
@@ -418,43 +778,32 @@ export function useSupabaseRoom({
         duration: 30,
       };
 
+      handleBroadcastEvent('ROUND_PREPARE', payload);
       broadcastMessage('ROUND_PREPARE', payload);
     },
-    [currentPlayer.isHost, broadcastMessage]
-  );
-
-  // Host: End round and show reveal
-  const endRound = useCallback(
-    (track: Track) => {
-      if (!currentPlayer.isHost) return;
-
-      const scoreMap: Record<string, number> = {};
-      players.forEach((p) => {
-        scoreMap[p.id] = p.score;
-      });
-
-      broadcastMessage('ROUND_END', {
-        track,
-        scores: scoreMap,
-      });
-    },
-    [currentPlayer.isHost, players, broadcastMessage]
+    [broadcastMessage, handleBroadcastEvent]
   );
 
   // Host: Final Game Over
   const endGame = useCallback(
     (finalPlayers: Player[]) => {
-      if (!currentPlayer.isHost) return;
+      if (!isHostRef.current) return;
+      roundActiveRef.current = false;
+      clearTimers();
+      handleBroadcastEvent('GAME_OVER', { finalPlayers });
       broadcastMessage('GAME_OVER', { finalPlayers });
     },
-    [currentPlayer.isHost, broadcastMessage]
+    [clearTimers, handleBroadcastEvent, broadcastMessage]
   );
 
   // Host: Return to lobby
   const returnToLobby = useCallback(() => {
-    if (!currentPlayer.isHost) return;
+    if (!isHostRef.current) return;
+    roundActiveRef.current = false;
+    clearTimers();
+    handleBroadcastEvent('RETURN_TO_LOBBY', {});
     broadcastMessage('RETURN_TO_LOBBY', {});
-  }, [currentPlayer.isHost, broadcastMessage]);
+  }, [clearTimers, handleBroadcastEvent, broadcastMessage]);
 
   return {
     players,
@@ -470,6 +819,7 @@ export function useSupabaseRoom({
     recentScorer,
     isSupabaseConnected,
     submitCorrectGuess,
+    submitSkipGuess,
     startNextRound,
     endRound,
     endGame,

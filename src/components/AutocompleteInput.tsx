@@ -74,8 +74,10 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
 
   const handleSelect = (track: Track) => {
     onSelectTrack(track);
-    setQuery(`${track.title} - ${track.artist}`);
+    setQuery('');
+    setResults([]);
     setIsOpen(false);
+    setSelectedIndex(-1);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -100,6 +102,10 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
         if (onSubmitGuess) {
           onSubmitGuess(query.trim());
         }
+        setQuery('');
+        setResults([]);
+        setIsOpen(false);
+        setSelectedIndex(-1);
       }
     } else if (e.key === 'Escape') {
       setIsOpen(false);
@@ -108,10 +114,15 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim() && onSubmitGuess && !disabled) {
+    if (disabled) return;
+    if (isOpen && selectedIndex >= 0 && results[selectedIndex]) {
+      handleSelect(results[selectedIndex]);
+    } else if (query.trim() && onSubmitGuess) {
       onSubmitGuess(query.trim());
       setQuery('');
+      setResults([]);
       setIsOpen(false);
+      setSelectedIndex(-1);
     }
   };
 
@@ -140,7 +151,7 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
           placeholder={disabled ? 'Round ended or already solved' : effectivePlaceholder}
           autoFocus={autoFocus}
           autoComplete="off"
-          className="w-full pl-9 sm:pl-11 pr-20 sm:pr-24 py-2.5 sm:py-3.5 bg-zinc-900 border border-zinc-700 focus:border-rose-500 rounded-xl text-white placeholder-zinc-500 text-xs sm:text-sm md:text-base shadow-inner focus:outline-none focus:ring-2 focus:ring-rose-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full pl-9 sm:pl-11 pr-10 sm:pr-12 py-2.5 sm:py-3.5 bg-zinc-900 border border-zinc-700 focus:border-rose-500 rounded-xl text-white placeholder-zinc-500 text-xs sm:text-sm md:text-base shadow-inner focus:outline-none focus:ring-2 focus:ring-rose-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         />
 
         {query && !disabled && (
@@ -153,20 +164,11 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
               setIsOpen(false);
               inputRef.current?.focus();
             }}
-            className="absolute right-12 sm:right-14 text-zinc-400 hover:text-white p-1 transition-colors"
+            className="absolute right-3 sm:right-3.5 text-zinc-400 hover:text-white p-1 transition-colors"
           >
-            <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <X className="w-4 h-4" />
           </button>
         )}
-
-        <button
-          type="submit"
-          id="autocomplete-submit-btn"
-          disabled={disabled || !query.trim()}
-          className="absolute right-1.5 sm:right-2 px-3 sm:px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-rose-500 to-orange-400 hover:from-rose-400 hover:to-orange-300 disabled:from-zinc-800 disabled:to-zinc-800 text-white font-black rounded-lg text-xs shadow-md active:scale-95 transition-all disabled:text-zinc-600 disabled:cursor-not-allowed cursor-pointer"
-        >
-          Guess
-        </button>
       </form>
 
       {/* Autocomplete Dropdown */}
@@ -184,10 +186,6 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
                 onMouseEnter={() => setSelectedIndex(idx)}
                 onClick={() => {
                   handleSelect(track);
-                  if (onSubmitGuess) {
-                    onSubmitGuess(`${track.title} - ${track.artist}`);
-                    setQuery('');
-                  }
                 }}
                 className={`flex items-center gap-3 px-3.5 py-2.5 cursor-pointer transition-colors ${
                   isSelected ? 'bg-zinc-700 text-rose-300' : 'text-zinc-200 hover:bg-zinc-700/60'

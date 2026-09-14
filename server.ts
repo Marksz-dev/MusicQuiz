@@ -3,6 +3,15 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { VERIFIED_YOUTUBE_TRACKS } from './src/services/youtubeTracks';
 
+// Sanitize Supabase URL if provided with trailing /rest/v1/ or slashes
+if (process.env.VITE_SUPABASE_URL) {
+  try {
+    process.env.VITE_SUPABASE_URL = new URL(process.env.VITE_SUPABASE_URL.trim()).origin;
+  } catch {
+    process.env.VITE_SUPABASE_URL = process.env.VITE_SUPABASE_URL.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+  }
+}
+
 const app = express();
 const PORT = 3000;
 

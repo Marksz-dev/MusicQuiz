@@ -84,6 +84,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                         <CheckCircle className="w-3 h-3 text-green-400" />
                         <span>+{player.roundScore || 0}</span>
                       </span>
+                    ) : player.hasSubmittedGuess ? (
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 text-[11px] font-medium border border-zinc-700">
+                        <span>Passed</span>
+                      </span>
                     ) : (
                       <span className="flex items-center gap-1 text-[11px] text-zinc-400 font-mono">
                         <Clock className="w-3 h-3 animate-spin text-rose-400" /> Guessing...
