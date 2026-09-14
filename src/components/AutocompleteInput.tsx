@@ -117,12 +117,12 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
 
   return (
     <div ref={containerRef} className="relative w-full max-w-xl mx-auto">
-      <form onSubmit={handleFormSubmit} className="relative flex items-center">
-        <div className="absolute left-3.5 pointer-events-none text-orange-200">
+      <form onSubmit={handleFormSubmit} className="relative flex items-center w-full">
+        <div className="absolute left-3 sm:left-3.5 pointer-events-none text-zinc-400">
           {isLoading ? (
-            <Loader2 className="w-5 h-5 animate-spin text-amber-300" />
+            <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-rose-400" />
           ) : (
-            <Search className="w-5 h-5" />
+            <Search className="w-4 h-4 sm:w-5 sm:h-5" />
           )}
         </div>
 
@@ -140,7 +140,7 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
           placeholder={disabled ? 'Round ended or already solved' : effectivePlaceholder}
           autoFocus={autoFocus}
           autoComplete="off"
-          className="w-full pl-11 pr-24 py-3.5 bg-[#361300]/95 border border-[#8C3700] focus:border-amber-400 rounded-xl text-white placeholder-orange-200/50 text-sm md:text-base shadow-inner focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full pl-9 sm:pl-11 pr-20 sm:pr-24 py-2.5 sm:py-3.5 bg-zinc-900 border border-zinc-700 focus:border-rose-500 rounded-xl text-white placeholder-zinc-500 text-xs sm:text-sm md:text-base shadow-inner focus:outline-none focus:ring-2 focus:ring-rose-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         />
 
         {query && !disabled && (
@@ -153,9 +153,9 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
               setIsOpen(false);
               inputRef.current?.focus();
             }}
-            className="absolute right-14 text-orange-200 hover:text-white p-1 transition-colors"
+            className="absolute right-12 sm:right-14 text-zinc-400 hover:text-white p-1 transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         )}
 
@@ -163,7 +163,7 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
           type="submit"
           id="autocomplete-submit-btn"
           disabled={disabled || !query.trim()}
-          className="absolute right-2 px-3.5 py-2 bg-gradient-to-r from-amber-400 to-[#FF7700] hover:from-amber-300 hover:to-orange-500 disabled:from-[#2E1000] disabled:to-[#2E1000] text-stone-950 font-black rounded-lg text-xs shadow-md active:scale-95 transition-all disabled:text-orange-200/40 disabled:cursor-not-allowed"
+          className="absolute right-1.5 sm:right-2 px-3 sm:px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-rose-500 to-orange-400 hover:from-rose-400 hover:to-orange-300 disabled:from-zinc-800 disabled:to-zinc-800 text-white font-black rounded-lg text-xs shadow-md active:scale-95 transition-all disabled:text-zinc-600 disabled:cursor-not-allowed cursor-pointer"
         >
           Guess
         </button>
@@ -173,7 +173,7 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
       {isOpen && results.length > 0 && (
         <ul
           id="autocomplete-results-dropdown"
-          className="absolute z-50 left-0 right-0 mt-2 max-h-72 overflow-y-auto bg-[#361300] border border-[#8C3700] rounded-xl shadow-2xl backdrop-blur-md divide-y divide-[#521E00]"
+          className="absolute z-50 left-0 right-0 mt-2 max-h-72 overflow-y-auto bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl backdrop-blur-md divide-y divide-zinc-700/60"
         >
           {results.map((track, idx) => {
             const isSelected = idx === selectedIndex;
@@ -190,7 +190,7 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
                   }
                 }}
                 className={`flex items-center gap-3 px-3.5 py-2.5 cursor-pointer transition-colors ${
-                  isSelected ? 'bg-[#521E00] text-amber-200' : 'text-stone-200 hover:bg-[#471C00]'
+                  isSelected ? 'bg-zinc-700 text-rose-300' : 'text-zinc-200 hover:bg-zinc-700/60'
                 }`}
               >
                 {/* Artwork / Icon */}
@@ -199,10 +199,10 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
                     src={track.artworkUrl}
                     alt={track.title}
                     referrerPolicy="no-referrer"
-                    className="w-10 h-10 rounded-md object-cover flex-shrink-0 bg-[#2E1000] border border-[#6E2900]"
+                    className="w-10 h-10 rounded-md object-cover flex-shrink-0 bg-zinc-900 border border-zinc-700"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-md bg-[#2E1000] flex items-center justify-center text-orange-200 flex-shrink-0">
+                  <div className="w-10 h-10 rounded-md bg-zinc-900 flex items-center justify-center text-zinc-500 flex-shrink-0 border border-zinc-700">
                     <Music className="w-5 h-5" />
                   </div>
                 )}
@@ -210,13 +210,13 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
                 {/* Track Details */}
                 <div className="flex-1 min-w-0 text-left">
                   <div className="text-sm font-semibold truncate text-white">{track.title}</div>
-                  <div className="text-xs text-orange-200/80 truncate">
+                  <div className="text-xs text-zinc-400 truncate">
                     {track.artist} {track.releaseDate ? `• ${track.releaseDate}` : ''}
                   </div>
                 </div>
 
                 {isSelected && (
-                  <Check className="w-4 h-4 text-amber-300 flex-shrink-0" />
+                  <Check className="w-4 h-4 text-rose-400 flex-shrink-0" />
                 )}
               </li>
             );

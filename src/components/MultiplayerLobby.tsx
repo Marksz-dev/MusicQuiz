@@ -44,12 +44,12 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 py-6 flex flex-col gap-6">
+    <div className="w-full max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-5 sm:gap-6">
       {/* Top Banner: Room Code & Quick Share */}
-      <div className="bg-gradient-to-r from-[#4A1C00] via-[#5C2300] to-[#4A1C00] border border-[#CC5500]/60 rounded-2xl p-5 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="bg-zinc-800 border border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
           <div className="flex flex-col">
-            <span className="text-xs font-mono uppercase tracking-widest text-amber-300 font-semibold">
+            <span className="text-xs font-mono uppercase tracking-widest text-purple-400 font-semibold">
               Multiplayer Room Code
             </span>
             <span
@@ -61,11 +61,11 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 w-full sm:w-auto">
           <button
             id="lobby-copy-code-btn"
             onClick={handleCopyRoomCode}
-            className="flex items-center gap-2 px-3.5 py-2 bg-[#361300] hover:bg-[#521E00] text-stone-200 hover:text-white rounded-xl text-xs sm:text-sm font-semibold border border-[#8C3700] transition-all cursor-pointer active:scale-95"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white rounded-xl text-xs sm:text-sm font-semibold border border-zinc-700 transition-all cursor-pointer active:scale-95 shrink-0"
             title="Copy Room Code"
           >
             {copiedCode ? (
@@ -75,7 +75,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
               </>
             ) : (
               <>
-                <Copy className="w-4 h-4 text-amber-300" />
+                <Copy className="w-4 h-4 text-purple-400" />
                 <span>Copy Code</span>
               </>
             )}
@@ -84,7 +84,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
           <button
             id="lobby-share-link-btn"
             onClick={handleCopyShareLink}
-            className="flex items-center gap-2 px-3.5 py-2 bg-[#521E00] hover:bg-[#6E2900] text-amber-200 hover:text-white rounded-xl text-xs sm:text-sm font-semibold border border-[#CC5500]/50 transition-all cursor-pointer active:scale-95"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs sm:text-sm font-semibold border border-purple-500/50 shadow-md shadow-purple-950/30 transition-all cursor-pointer active:scale-95 shrink-0"
             title="Copy Link to share with friends"
           >
             <ExternalLink className="w-4 h-4" />
@@ -96,15 +96,15 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
       {/* Grid: Room Settings (Host) & Participant Roster */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Left: Connected Players Roster (md:col-span-7) */}
-        <div className="md:col-span-7 bg-[#471C00]/95 border border-[#8C3700]/70 rounded-2xl p-5 shadow-2xl flex flex-col gap-4">
-          <div className="flex items-center justify-between border-b border-[#8C3700]/50 pb-3">
+        <div className="md:col-span-7 bg-zinc-800 border border-zinc-700 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+          <div className="flex items-center justify-between border-b border-zinc-700/80 pb-3">
             <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-amber-300" />
+              <Users className="w-5 h-5 text-purple-400" />
               <h3 className="font-bold text-white text-base">
                 Players in Lobby ({players.length})
               </h3>
             </div>
-            <span className="text-xs text-orange-200/80 font-mono">
+            <span className="text-xs text-zinc-400 font-mono">
               Live Presence Sync
             </span>
           </div>
@@ -118,8 +118,8 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   id={`lobby-player-row-${p.id}`}
                   className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
                     isMe
-                      ? 'bg-[#5C2300] border-[#CC5500]/70 text-white shadow-sm'
-                      : 'bg-[#361300] border-[#6E2900] text-stone-200'
+                      ? 'bg-purple-950/40 border-purple-500/50 text-white shadow-sm'
+                      : 'bg-zinc-900 border-zinc-700 text-zinc-200'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -132,17 +132,17 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                           {p.name}
                         </span>
                         {isMe && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-semibold border border-amber-400/40">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/40">
                             YOU
                           </span>
                         )}
                         {p.isHost && (
-                          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">
+                          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-600 text-white font-semibold border border-purple-400/50">
                             <Crown className="w-3 h-3" /> HOST
                           </span>
                         )}
                       </div>
-                      <span className="text-xs text-orange-200/70 font-mono">
+                      <span className="text-xs text-zinc-400 font-mono">
                         Ready to Guess
                       </span>
                     </div>
@@ -154,16 +154,16 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
             })}
           </div>
 
-          <p className="text-xs text-orange-200/80 text-center mt-2">
+          <p className="text-xs text-zinc-400 text-center mt-2">
             💡 <strong className="text-white">Multiplayer Tip:</strong> You can open another tab in your browser with this room code to test live competitive guessing against yourself!
           </p>
         </div>
 
         {/* Right: Match Configuration (md:col-span-5) */}
-        <div className="md:col-span-5 bg-[#471C00]/95 border border-[#8C3700]/70 rounded-2xl p-5 shadow-2xl flex flex-col justify-between gap-5">
+        <div className="md:col-span-5 bg-zinc-800 border border-zinc-700 rounded-2xl p-5 shadow-xl flex flex-col justify-between gap-5">
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2 border-b border-[#8C3700]/50 pb-3">
-              <Settings2 className="w-5 h-5 text-amber-300" />
+            <div className="flex items-center gap-2 border-b border-zinc-700/80 pb-3">
+              <Settings2 className="w-5 h-5 text-rose-400" />
               <h3 className="font-bold text-white text-base">
                 Match Settings
               </h3>
@@ -171,7 +171,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
 
             {/* Genre Pack Selector */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-orange-100">
+              <label className="text-xs font-semibold text-zinc-300">
                 Music Genre Category
               </label>
               <select
@@ -181,7 +181,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                 onChange={(e) =>
                   onUpdateSettings({ ...settings, genre: e.target.value })
                 }
-                className="bg-[#2E1000] border border-[#8C3700] text-stone-100 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-amber-400 cursor-pointer disabled:opacity-60"
+                className="bg-zinc-900 border border-zinc-700 text-white text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-rose-500 cursor-pointer disabled:opacity-60"
               >
                 {GENRE_CATEGORIES.map((cat) => (
                   <option key={cat.id} value={cat.id}>
@@ -193,7 +193,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
 
             {/* Round Count Selector */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-orange-100">
+              <label className="text-xs font-semibold text-zinc-300">
                 Rounds Per Game
               </label>
               <div className="grid grid-cols-3 gap-2">
@@ -207,8 +207,8 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                     }
                     className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                       settings.totalRounds === count
-                        ? 'bg-gradient-to-r from-amber-400 to-[#FF7700] text-stone-950 font-black border-amber-400 shadow-md'
-                        : 'bg-[#2E1000] text-orange-200/80 border-[#6E2900] hover:border-[#8C3700]'
+                        ? 'bg-gradient-to-r from-rose-500 to-orange-400 text-white font-black border-rose-400 shadow-md'
+                        : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:border-zinc-600'
                     } disabled:cursor-not-allowed`}
                   >
                     {count} Rounds
@@ -218,8 +218,8 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
             </div>
 
             {/* Decaying Score Info */}
-            <div className="bg-[#2E1000] rounded-xl p-3 border border-[#6E2900] text-xs text-orange-200/90 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-amber-300 font-semibold">
+            <div className="bg-zinc-900 rounded-xl p-3 border border-zinc-700 text-xs text-zinc-400 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-rose-400 font-semibold">
                 <Sparkles className="w-3.5 h-3.5" /> Time-Attack Scoring
               </div>
               <p>
@@ -229,19 +229,19 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col gap-2 pt-2 border-t border-[#8C3700]/50">
+          <div className="flex flex-col gap-2 pt-2 border-t border-zinc-700/80">
             {isHost ? (
               <button
                 id="lobby-start-game-btn"
                 onClick={onStartGame}
                 disabled={players.length < 1}
-                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-gradient-to-r from-amber-400 to-[#FF7700] hover:from-amber-300 hover:to-orange-500 text-stone-950 font-black rounded-xl shadow-lg shadow-black/25 active:scale-98 transition-all cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-gradient-to-r from-rose-500 to-orange-400 hover:from-rose-400 hover:to-orange-300 text-white font-black rounded-xl shadow-lg shadow-rose-950/40 active:scale-98 transition-all cursor-pointer"
               >
                 <Play className="w-5 h-5 fill-current" />
                 <span>Start Match ({players.length} {players.length === 1 ? 'Player' : 'Players'})</span>
               </button>
             ) : (
-              <div className="py-3 px-4 bg-[#2E1000] border border-[#6E2900] rounded-xl text-center text-xs text-orange-200/80 font-medium">
+              <div className="py-3 px-4 bg-zinc-900 border border-zinc-700 rounded-xl text-center text-xs text-zinc-400 font-medium">
                 Waiting for host to start the game...
               </div>
             )}
@@ -249,7 +249,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
             <button
               id="lobby-leave-room-btn"
               onClick={onLeaveRoom}
-              className="w-full py-2.5 px-4 text-xs font-semibold text-orange-200 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition-colors cursor-pointer"
+              className="w-full py-2.5 px-4 text-xs font-semibold text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer"
             >
               Leave Room
             </button>

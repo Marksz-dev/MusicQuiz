@@ -1,5 +1,5 @@
 {
-  "name": "SongSpot",
+  "name": "SongFight",
   "description": "Interactive music guessing game featuring Single Player progressive Heardle mode and real-time multiplayer time-attack lobbies with YouTube audio for Anime and Videogames and iTunes for global hits.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

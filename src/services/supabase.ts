@@ -1,34 +1,13 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Local storage keys for user-configured Supabase credentials
-const STORAGE_SUPABASE_URL = 'songspot_supabase_url';
-const STORAGE_SUPABASE_KEY = 'songspot_supabase_anon_key';
-
 export function getSavedSupabaseConfig(): { url: string; key: string } {
-  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-  const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
-
-  const storedUrl = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_SUPABASE_URL) || '' : '';
-  const storedKey = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_SUPABASE_KEY) || '' : '';
+  const envUrl = ((import.meta as any).env?.VITE_SUPABASE_URL || '').trim();
+  const envKey = ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '').trim();
 
   return {
-    url: storedUrl || envUrl,
-    key: storedKey || envKey,
+    url: envUrl,
+    key: envKey,
   };
-}
-
-export function saveSupabaseConfig(url: string, key: string) {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_SUPABASE_URL, url.trim());
-    localStorage.setItem(STORAGE_SUPABASE_KEY, key.trim());
-  }
-}
-
-export function clearSupabaseConfig() {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem(STORAGE_SUPABASE_URL);
-    localStorage.removeItem(STORAGE_SUPABASE_KEY);
-  }
 }
 
 let cachedClient: SupabaseClient | null = null;
@@ -63,13 +42,13 @@ export function getSupabaseClient(): SupabaseClient | null {
 }
 
 /**
- * The complete Supabase SQL Schema for SongSpot:
+ * The complete Supabase SQL Schema for SongFight:
  * Includes rooms, players, and rounds tables, foreign keys, indexes,
  * row level security (RLS) policies for anonymous party play,
  * and Supabase Realtime publication setup.
  */
 export const SUPABASE_SQL_SCHEMA = `-- ==============================================================================
--- SongSpot: Supabase Schema with Realtime Channels, Presence & Broadcast
+-- SongFight: Supabase Schema with Realtime Channels, Presence & Broadcast
 -- Run this script in the Supabase SQL Editor (Database -> SQL Editor)
 -- ==============================================================================
 

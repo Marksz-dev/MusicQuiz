@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Play, Volume2, SkipForward, CheckCircle2, XCircle, RotateCcw, Award, Share2, Music, Sparkles, Youtube } from 'lucide-react';
+import { Play, Volume2, SkipForward, CheckCircle2, XCircle, RotateCcw, Award, Copy, Check, Music, Sparkles, Youtube } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Track, GuessAttempt, SinglePlayerStats } from '../types/game';
 import { AudioPlayer } from './AudioPlayer';
@@ -21,7 +21,7 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
   const [isGameOver, setIsGameOver] = useState(false);
   const [hasWon, setHasWon] = useState(false);
   const [isLoadingSong, setIsLoadingSong] = useState(true);
-  const [copiedShare, setCopiedShare] = useState(false);
+  const [copiedSong, setCopiedSong] = useState(false);
 
   // Load and save stats from localStorage
   const getStoredStats = (): SinglePlayerStats => {
@@ -144,44 +144,65 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
     }
   };
 
-  // Generate shareable emoji grid
-  const generateShareText = () => {
-    const emojis = attempts.map((a) => {
-      if (a.isCorrect) return '🟩';
-      if (a.isSkipped) return '⬛';
-      return '🟥';
-    });
-    // Pad remaining attempts with white squares if won early
-    while (emojis.length < MAX_ATTEMPTS) {
-      emojis.push('⬜');
+  const copySongName = () => {
+    if (!targetTrack) return;
+    
+    // Include song title, artist, and album if present
+    let copyText = targetTrack.title;
+    if (targetTrack.artist) {
+      copyText += ` - ${targetTrack.artist}`;
+    }
+    if (targetTrack.album) {
+      const albumClean = targetTrack.album.trim();
+      if (albumClean.startsWith('(') && albumClean.endsWith(')')) {
+        copyText += ` ${albumClean}`;
+      } else {
+        copyText += ` (${albumClean})`;
+      }
     }
 
-    const scoreStr = hasWon ? `${attempts.length}/${MAX_ATTEMPTS}` : `X/${MAX_ATTEMPTS}`;
-    return `SongSpot Heardle 🎵 ${scoreStr}\n${emojis.join('')}\nhttps://songspot.app`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(copyText).then(() => {
+        setCopiedSong(true);
+        setTimeout(() => setCopiedSong(false), 2500);
+      }).catch(() => {
+        fallbackCopyText(copyText);
+      });
+    } else {
+      fallbackCopyText(copyText);
+    }
   };
 
-  const copyShareResults = () => {
-    const text = generateShareText();
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-      setCopiedShare(true);
-      setTimeout(() => setCopiedShare(false), 2500);
+  const fallbackCopyText = (text: string) => {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopiedSong(true);
+      setTimeout(() => setCopiedSong(false), 2500);
+    } catch (err) {
+      console.error('Failed to copy', err);
     }
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-6 flex flex-col items-center">
+    <div className="w-full max-w-xl mx-auto px-3 sm:px-4 py-4 sm:py-6 flex flex-col items-center">
       {/* Genre Selector Header */}
-      <div className="w-full flex items-center justify-between gap-3 mb-6 pb-4 border-b border-[#8C3700]/50">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-amber-300" />
-          <span className="text-sm font-semibold text-orange-100">Genre Pack:</span>
+      <div className="w-full flex flex-wrap items-center justify-between gap-2 sm:gap-3 mb-5 sm:mb-6 pb-3 sm:pb-4 border-b border-zinc-700/80">
+        <div className="flex items-center gap-2 max-w-full">
+          <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400 shrink-0" />
+          <span className="text-xs sm:text-sm font-semibold text-zinc-300 whitespace-nowrap">Genre:</span>
           <select
             id="singleplayer-genre-select"
             value={selectedGenre}
             onChange={(e) => setSelectedGenre(e.target.value)}
             disabled={isLoadingSong}
-            className="bg-[#361300] border border-[#8C3700] text-stone-100 text-xs sm:text-sm font-medium rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-400 cursor-pointer shadow-sm"
+            className="bg-zinc-800 border border-zinc-700 text-white text-xs sm:text-sm font-medium rounded-xl px-2.5 sm:px-3 py-1.5 focus:outline-none focus:border-rose-500 cursor-pointer shadow-sm max-w-[140px] sm:max-w-none truncate"
           >
             {GENRE_CATEGORIES.map((g) => (
               <option key={g.id} value={g.id}>
@@ -195,29 +216,29 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
           id="singleplayer-new-song-btn"
           onClick={() => loadNewTrack(selectedGenre)}
           disabled={isLoadingSong}
-          className="flex items-center gap-1.5 text-xs text-orange-200 hover:text-white transition-colors cursor-pointer font-medium"
+          className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer font-medium shrink-0 ml-auto"
         >
           <RotateCcw className={`w-3.5 h-3.5 ${isLoadingSong ? 'animate-spin' : ''}`} />
-          New Song
+          <span className="whitespace-nowrap">New Song</span>
         </button>
       </div>
 
       {isLoadingSong ? (
-        <div className="py-24 flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
-          <p className="text-orange-100 text-sm font-medium">Fetching 30s track preview from iTunes...</p>
+        <div className="py-20 flex flex-col items-center gap-3 text-center px-4">
+          <div className="w-10 h-10 border-3 border-rose-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-zinc-400 text-sm font-medium">Fetching 30s track preview from iTunes...</p>
         </div>
       ) : targetTrack ? (
-        <div className="w-full flex flex-col gap-6">
+        <div className="w-full flex flex-col gap-5 sm:gap-6">
           {/* Segmented Timeline (1s, 2s, 4s, 8s, 16s) */}
           <div className="w-full flex flex-col gap-2">
-            <div className="flex items-center justify-between text-xs text-orange-100 font-mono px-1">
+            <div className="flex items-center justify-between text-xs text-zinc-400 font-mono px-1">
               <span>Attempt {attempts.length} of {MAX_ATTEMPTS}</span>
-              <span className="text-amber-300 font-bold">{currentMaxDuration}s Unlocked</span>
+              <span className="text-rose-400 font-bold">{currentMaxDuration}s Unlocked</span>
             </div>
 
             {/* Segmented visual progress blocks */}
-            <div className="grid grid-cols-5 gap-1.5 w-full h-3">
+            <div className="grid grid-cols-5 gap-1 sm:gap-1.5 w-full h-2.5 sm:h-3">
               {SNIPPET_DURATIONS.map((dur, idx) => {
                 const isUnlocked = idx <= currentAttemptIndex || isGameOver;
                 const isCurrent = idx === currentAttemptIndex && !isGameOver;
@@ -226,15 +247,15 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
                     key={dur}
                     className={`relative rounded-full transition-all duration-200 overflow-hidden ${
                       isUnlocked
-                        ? 'bg-gradient-to-r from-amber-400 to-[#FF7700] shadow-sm'
-                        : 'bg-[#361300] border border-[#6E2900]'
-                    } ${isCurrent ? 'ring-2 ring-amber-300/80' : ''}`}
+                        ? 'bg-gradient-to-r from-rose-500 to-orange-400 shadow-sm'
+                        : 'bg-zinc-900 border border-zinc-700'
+                    } ${isCurrent ? 'ring-2 ring-rose-400' : ''}`}
                     title={`${dur} second snippet`}
                   />
                 );
               })}
             </div>
-            <div className="flex justify-between text-[11px] text-orange-200/80 font-mono px-1">
+            <div className="flex justify-between text-[11px] text-zinc-500 font-mono px-1">
               {SNIPPET_DURATIONS.map((dur) => (
                 <span key={dur}>{dur}s</span>
               ))}
@@ -242,7 +263,7 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
           </div>
 
           {/* Audio Player Controls */}
-          <div className="bg-[#471C00]/95 border border-[#8C3700]/70 rounded-2xl p-5 shadow-2xl backdrop-blur-sm">
+          <div className="w-full bg-zinc-800 border border-zinc-700 rounded-2xl p-3.5 sm:p-5 shadow-xl">
             <AudioPlayer
               previewUrl={targetTrack.previewUrl}
               source={targetTrack.source}
@@ -257,10 +278,10 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
                     type="button"
                     onClick={handleSkip}
                     disabled={attempts.length >= MAX_ATTEMPTS}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-[#361300] hover:bg-[#521E00] active:scale-95 text-stone-200 hover:text-white rounded-full text-xs font-semibold border border-[#8C3700] shadow-sm transition-all cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+                    className="flex items-center gap-1 sm:gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3.5 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-300 hover:text-white rounded-full text-xs font-semibold border border-zinc-700 shadow-sm transition-all cursor-pointer disabled:opacity-50 disabled:pointer-events-none shrink-0 whitespace-nowrap"
                     title="Skip to unlock more audio"
                   >
-                    <SkipForward className="w-3.5 h-3.5 text-amber-300" />
+                    <SkipForward className="w-3.5 h-3.5 text-rose-400" />
                     <span>
                       Skip
                       {currentAttemptIndex < SNIPPET_DURATIONS.length - 1
@@ -276,11 +297,11 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
                     id="singleplayer-play-next-top-btn"
                     type="button"
                     onClick={() => loadNewTrack(selectedGenre)}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-gradient-to-r from-amber-400 to-[#FF7700] hover:from-amber-300 hover:to-orange-500 text-stone-950 font-black rounded-full text-xs shadow-md shadow-black/25 active:scale-95 transition-all cursor-pointer whitespace-nowrap animate-in fade-in zoom-in-95 duration-200"
+                    className="flex items-center gap-1.5 h-8 sm:h-9 px-3 sm:px-3.5 bg-gradient-to-r from-rose-500 to-orange-400 hover:from-rose-400 hover:to-orange-300 text-white font-black rounded-full text-xs shadow-lg shadow-rose-950/40 active:scale-95 transition-all cursor-pointer whitespace-nowrap animate-in fade-in zoom-in-95 duration-200"
                     title="Play next song"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Play Next Song</span>
+                    <span>Next Song</span>
                   </button>
                 )
               }
@@ -291,16 +312,26 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
           {isGameOver && (
             <div
               id="singleplayer-gameover-card"
-              className="w-full bg-gradient-to-b from-[#4A1C00] to-[#2E1000] border border-[#CC5500]/60 rounded-2xl p-6 shadow-2xl flex flex-col items-center text-center gap-4 animate-in fade-in zoom-in-95 duration-300"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-2xl p-6 shadow-xl flex flex-col items-center text-center gap-4 animate-in fade-in zoom-in-95 duration-300"
             >
               <div
                 className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${
                   hasWon
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                    : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                    ? 'bg-green-500/20 text-green-300 border border-green-500/40'
+                    : 'bg-red-500/20 text-red-300 border border-red-500/40'
                 }`}
               >
-                {hasWon ? '🎉 Fantastic Guess!' : '😢 Better Luck Next Time!'}
+                {hasWon ? (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+                    <span>Correct - Fantastic Guess!</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3.5 h-3.5 text-red-400" />
+                    <span>Better Luck Next Time!</span>
+                  </>
+                )}
               </div>
 
               {/* Album Art & Track Meta */}
@@ -310,10 +341,10 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
                     src={targetTrack.artworkUrl}
                     alt={targetTrack.title}
                     referrerPolicy="no-referrer"
-                    className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl shadow-xl object-cover border border-[#8C3700]"
+                    className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl shadow-xl object-cover border border-zinc-700"
                   />
                 ) : (
-                  <div className="w-28 h-28 rounded-2xl bg-[#361300] flex items-center justify-center text-orange-200">
+                  <div className="w-28 h-28 rounded-2xl bg-zinc-900 flex items-center justify-center text-zinc-500">
                     <Music className="w-12 h-12" />
                   </div>
                 )}
@@ -322,10 +353,10 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
                   <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
                     {targetTrack.title}
                   </h3>
-                  <p className="text-amber-300 text-sm sm:text-base font-semibold">
+                  <p className="text-rose-400 text-sm sm:text-base font-semibold">
                     {targetTrack.artist}
                   </p>
-                  <p className="text-orange-200 text-xs mt-1">
+                  <p className="text-zinc-400 text-xs mt-1">
                     Album: {targetTrack.album} {targetTrack.releaseDate ? `(${targetTrack.releaseDate})` : ''}
                   </p>
                   {targetTrack.source === 'youtube' && (
@@ -344,23 +375,24 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-wrap items-center justify-center gap-3 w-full pt-2">
+              <div className="flex items-center justify-center w-full pt-2">
                 <button
-                  id="singleplayer-share-results-btn"
-                  onClick={copyShareResults}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-[#361300] hover:bg-[#521E00] text-white rounded-xl text-xs sm:text-sm font-semibold border border-[#8C3700] transition-all cursor-pointer active:scale-95"
+                  id="singleplayer-copy-song-name-btn"
+                  onClick={copySongName}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-rose-500 to-orange-400 hover:from-rose-400 hover:to-orange-300 text-white font-black rounded-xl text-xs sm:text-sm shadow-lg shadow-rose-950/40 transition-all cursor-pointer active:scale-95"
+                  title="Copy song name, artist, and album to clipboard"
                 >
-                  <Share2 className="w-4 h-4 text-amber-300" />
-                  {copiedShare ? 'Copied to Clipboard!' : 'Share Result'}
-                </button>
-
-                <button
-                  id="singleplayer-play-again-btn"
-                  onClick={() => loadNewTrack(selectedGenre)}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-400 to-[#FF7700] hover:from-amber-300 hover:to-orange-500 text-stone-950 font-black rounded-xl text-xs sm:text-sm shadow-lg shadow-black/25 transition-all cursor-pointer active:scale-95"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Play Next Song
+                  {copiedSong ? (
+                    <>
+                      <Check className="w-4 h-4 text-white" />
+                      <span>Copied to Clipboard!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 text-white" />
+                      <span>Copy Song Name</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -388,25 +420,25 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
                   <div
                     key={idx}
                     id={`singleplayer-attempt-slot-${idx}`}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all shadow-sm ${
+                    className={`flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border text-xs sm:text-sm font-medium transition-all shadow-sm ${
                       attempt.isCorrect
-                        ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-200'
+                        ? 'bg-green-500/20 border-green-500/40 text-green-300'
                         : attempt.isSkipped
-                        ? 'bg-[#361300]/80 border-[#6E2900] text-orange-200'
-                        : 'bg-rose-950/70 border-rose-500/60 text-rose-200'
+                        ? 'bg-zinc-900/80 border-zinc-700 text-zinc-400'
+                        : 'bg-red-500/20 border-red-500/40 text-red-300'
                     }`}
                   >
-                    <div className="flex items-center gap-3 truncate">
+                    <div className="flex items-center gap-2 sm:gap-3 truncate min-w-0 flex-1">
                       {attempt.isCorrect ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-400 flex-shrink-0" />
                       ) : attempt.isSkipped ? (
-                        <SkipForward className="w-5 h-5 text-orange-300 flex-shrink-0" />
+                        <SkipForward className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-400 flex-shrink-0" />
                       ) : (
-                        <XCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+                        <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-400 flex-shrink-0" />
                       )}
                       <span className="truncate">{attempt.guessText}</span>
                     </div>
-                    <span className="text-xs font-mono text-orange-200/80 flex-shrink-0 ml-2">
+                    <span className="text-xs font-mono text-zinc-400 flex-shrink-0 ml-2">
                       {SNIPPET_DURATIONS[idx]}s
                     </span>
                   </div>
@@ -418,7 +450,7 @@ export const SinglePlayerView: React.FC<SinglePlayerViewProps> = ({ onOpenStats 
                 <div
                   key={idx}
                   id={`singleplayer-empty-slot-${idx}`}
-                  className="flex items-center px-4 py-3 rounded-xl border border-dashed border-[#8C3700]/60 bg-[#361300]/50 text-orange-200/70 text-sm font-mono shadow-inner"
+                  className="flex items-center px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 text-zinc-500 text-xs sm:text-sm font-mono shadow-inner"
                 >
                   Attempt {idx + 1}
                 </div>

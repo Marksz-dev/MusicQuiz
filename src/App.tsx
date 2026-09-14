@@ -13,7 +13,6 @@ import {
   Dice5,
   Crown,
   Volume2,
-  Database,
   Radio,
 } from 'lucide-react';
 import { Header } from './components/Header';
@@ -21,7 +20,6 @@ import { SinglePlayerView } from './components/SinglePlayerView';
 import { MultiplayerLobby } from './components/MultiplayerLobby';
 import { MultiplayerGame } from './components/MultiplayerGame';
 import { StatsModal } from './components/StatsModal';
-import { SqlSchemaModal } from './components/SqlSchemaModal';
 import { useSupabaseRoom } from './hooks/useSupabaseRoom';
 import { Player, RoomSettings, Track } from './types/game';
 import { getTracksForGenre } from './services/itunes';
@@ -50,7 +48,6 @@ function generateRandomRoomCode(): string {
 export default function App() {
   const [activeTab, setActiveTab] = useState<'single' | 'multiplayer'>('single');
   const [isStatsOpen, setIsStatsOpen] = useState(false);
-  const [isSchemaOpen, setIsSchemaOpen] = useState(false);
 
   // Player identity for multiplayer
   const [playerId] = useState(() => {
@@ -143,7 +140,7 @@ export default function App() {
     id: playerId,
     name: playerName,
     avatar: playerAvatar,
-    color: '#8b5cf6',
+    color: '#A855F7',
     score: 0,
     roundScore: 0,
     hasGuessedCorrect: false,
@@ -176,7 +173,7 @@ export default function App() {
       id: playerId,
       name: playerName,
       avatar: playerAvatar,
-      color: '#8b5cf6',
+      color: '#A855F7',
       isHost,
     },
   });
@@ -218,45 +215,43 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#CC5500] bg-gradient-to-b from-[#CC5500] via-[#B54A00] to-[#803300] text-stone-100 flex flex-col font-sans selection:bg-black selection:text-white">
+    <div className="min-h-screen bg-zinc-900 text-white flex flex-col font-sans selection:bg-rose-500 selection:text-white overflow-x-hidden w-full max-w-full">
       {/* Header */}
       <Header
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onOpenStats={() => setIsStatsOpen(true)}
-        onOpenSchema={() => setIsSchemaOpen(true)}
-        isSupabaseConnected={isSupabaseConnected}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col items-center justify-start w-full">
+      <main className="flex-1 flex flex-col items-center justify-start w-full max-w-full overflow-x-hidden">
         {activeTab === 'single' ? (
           /* ================= SINGLE PLAYER MODE ================= */
-          <div className="w-full flex flex-col items-center py-4">
+          <div className="w-full max-w-full flex flex-col items-center py-2 sm:py-4">
             <SinglePlayerView onOpenStats={() => setIsStatsOpen(true)} />
           </div>
         ) : (
           /* ================= MULTIPLAYER ROOM MODE ================= */
-          <div className="w-full flex flex-col items-center py-4">
+          <div className="w-full max-w-full flex flex-col items-center py-2 sm:py-4">
             {!activeRoomCode ? (
               /* Room Join & Creation Gate */
               <div className="w-full max-w-lg mx-auto px-4 py-8 flex flex-col gap-6">
                 {/* Intro Card */}
                 <div className="text-center flex flex-col items-center gap-2">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-300 via-orange-500 to-amber-600 flex items-center justify-center shadow-xl shadow-black/25 mb-1">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-500 via-pink-500 to-orange-400 flex items-center justify-center shadow-xl shadow-rose-950/30 mb-1">
                     <Radio className="w-6 h-6 text-white" />
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight drop-shadow-sm">
                     Multiplayer Time-Attack
                   </h2>
-                  <p className="text-sm text-orange-100 max-w-sm">
+                  <p className="text-sm text-zinc-400 max-w-sm">
                     Compete in real-time with friends. Fast guesses score up to 1,000 decaying points per song!
                   </p>
                 </div>
 
                 {/* Profile Customization */}
-                <div className="bg-[#471C00]/95 border border-[#8C3700]/70 rounded-2xl p-5 shadow-2xl backdrop-blur-sm flex flex-col gap-4">
-                  <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                <div className="bg-zinc-800 border border-zinc-700 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+                  <span className="text-xs font-bold uppercase tracking-wider text-rose-400">
                     Your Player Identity
                   </span>
 
@@ -265,7 +260,7 @@ export default function App() {
                     <div className="relative">
                       <button
                         type="button"
-                        className="w-12 h-12 rounded-xl bg-[#361300] border border-[#8C3700] flex items-center justify-center text-2xl shadow hover:border-amber-400 transition-colors cursor-pointer"
+                        className="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-700 flex items-center justify-center text-2xl shadow hover:border-purple-500 transition-colors cursor-pointer"
                         title="Change Avatar"
                         onClick={() => {
                           const nextIdx =
@@ -285,12 +280,12 @@ export default function App() {
                         value={playerName}
                         onChange={(e) => handleSavePlayerName(e.target.value)}
                         placeholder="Enter nickname..."
-                        className="w-full px-3.5 py-2.5 bg-[#2E1000] border border-[#8C3700] rounded-xl text-white font-semibold text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40"
+                        className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 font-semibold text-sm focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/40"
                       />
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-orange-200">
+                  <div className="flex items-center justify-between text-xs text-zinc-400">
                     <span>Click avatar emoji to shuffle</span>
                     <button
                       type="button"
@@ -299,7 +294,7 @@ export default function App() {
                           DEFAULT_NAMES[Math.floor(Math.random() * DEFAULT_NAMES.length)];
                         handleSavePlayerName(randomName);
                       }}
-                      className="text-amber-300 hover:text-amber-200 flex items-center gap-1 cursor-pointer font-medium"
+                      className="text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer font-medium transition-colors"
                     >
                       <Dice5 className="w-3.5 h-3.5" /> Random Nickname
                     </button>
@@ -309,13 +304,13 @@ export default function App() {
                 {/* Create or Join Buttons */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Create Room */}
-                  <div className="bg-[#471C00]/95 border border-[#8C3700]/70 rounded-2xl p-5 shadow-2xl backdrop-blur-sm flex flex-col justify-between gap-4 text-center">
+                  <div className="bg-zinc-800 border border-zinc-700 rounded-2xl p-5 shadow-xl flex flex-col justify-between gap-4 text-center">
                     <div className="flex flex-col items-center gap-1">
-                      <div className="w-10 h-10 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center mb-1">
+                      <div className="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center mb-1">
                         <PlusCircle className="w-5 h-5" />
                       </div>
                       <h3 className="font-bold text-white text-base">Host a Room</h3>
-                      <p className="text-xs text-orange-100">
+                      <p className="text-xs text-zinc-400">
                         Choose genre, invite friends with a 6-character room code.
                       </p>
                     </div>
@@ -323,7 +318,7 @@ export default function App() {
                     <button
                       id="create-room-btn"
                       onClick={handleCreateRoom}
-                      className="w-full py-3 px-4 bg-gradient-to-r from-amber-400 to-[#FF7700] hover:from-amber-300 hover:to-orange-500 text-stone-950 font-black rounded-xl shadow-lg shadow-black/20 active:scale-95 transition-all cursor-pointer text-sm"
+                      className="w-full py-3 px-4 bg-gradient-to-r from-rose-500 to-orange-400 hover:from-rose-400 hover:to-orange-300 text-white font-black rounded-xl shadow-lg shadow-rose-950/40 active:scale-95 transition-all cursor-pointer text-sm"
                     >
                       Create Room
                     </button>
@@ -332,14 +327,14 @@ export default function App() {
                   {/* Join Room */}
                   <form
                     onSubmit={handleJoinRoom}
-                    className="bg-[#471C00]/95 border border-[#8C3700]/70 rounded-2xl p-5 shadow-2xl backdrop-blur-sm flex flex-col justify-between gap-4 text-center"
+                    className="bg-zinc-800 border border-zinc-700 rounded-2xl p-5 shadow-xl flex flex-col justify-between gap-4 text-center"
                   >
                     <div className="flex flex-col items-center gap-1">
-                      <div className="w-10 h-10 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center mb-1">
+                      <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center mb-1">
                         <LogIn className="w-5 h-5" />
                       </div>
                       <h3 className="font-bold text-white text-base">Join Match</h3>
-                      <p className="text-xs text-orange-100">
+                      <p className="text-xs text-zinc-400">
                         Got a code from a friend? Enter it below to jump in!
                       </p>
                     </div>
@@ -352,16 +347,16 @@ export default function App() {
                         value={joinCodeInput}
                         onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
                         placeholder="e.g. SPOT42"
-                        className="w-full px-3 py-2 bg-[#2E1000] border border-[#8C3700] rounded-xl text-center text-white font-mono font-bold tracking-widest text-base uppercase focus:outline-none focus:border-amber-400"
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-center text-white placeholder-zinc-600 font-mono font-bold tracking-widest text-base uppercase focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40"
                       />
                       {joinError && (
-                        <span className="text-[11px] text-rose-300 font-medium">{joinError}</span>
+                        <span className="text-[11px] text-red-400 font-medium">{joinError}</span>
                       )}
                       <button
                         type="submit"
                         id="join-room-submit-btn"
                         disabled={!joinCodeInput.trim()}
-                        className="w-full py-2.5 px-4 bg-[#361300] hover:bg-[#521E00] text-white font-bold rounded-xl border border-[#8C3700] text-sm transition-all disabled:opacity-50 cursor-pointer"
+                        className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl border border-purple-500/50 shadow-lg shadow-purple-950/40 text-sm transition-all disabled:opacity-50 cursor-pointer active:scale-95"
                       >
                         Join Room
                       </button>
@@ -409,11 +404,6 @@ export default function App() {
       <StatsModal
         isOpen={isStatsOpen}
         onClose={() => setIsStatsOpen(false)}
-      />
-
-      <SqlSchemaModal
-        isOpen={isSchemaOpen}
-        onClose={() => setIsSchemaOpen(false)}
       />
     </div>
   );

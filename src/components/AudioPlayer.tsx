@@ -158,9 +158,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     maxPlaySecondsRef.current = maxPlaySeconds;
   }, [maxPlaySeconds]);
 
+  const prevStartFromSecondsRef = useRef(startFromSeconds);
+
   useEffect(() => {
     startFromSecondsRef.current = startFromSeconds;
-    if (!isPlaying) {
+    if (prevStartFromSecondsRef.current !== startFromSeconds) {
+      prevStartFromSecondsRef.current = startFromSeconds;
       if (isYouTube && ytPlayerRef.current?.seekTo) {
         try {
           ytPlayerRef.current.seekTo(startFromSeconds, true);
@@ -170,7 +173,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       }
       setCurrentTime(startFromSeconds);
     }
-  }, [startFromSeconds, isPlaying, isYouTube]);
+  }, [startFromSeconds, isYouTube]);
 
   useEffect(() => {
     onPlayStateChangeRef.current = onPlayStateChange;
@@ -228,20 +231,19 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
       const maxSec = maxPlaySecondsRef.current;
 
-      // 1. Single Player: Stop snippet when reaching max seconds
+      // 1. Single Player: Stop snippet when reaching max seconds while keeping position reached
       if (maxSec && current >= maxSec) {
-        const resetTo = startFromSecondsRef.current || 0;
         if (isYouTube && ytPlayerRef.current) {
           try {
             ytPlayerRef.current.pauseVideo();
-            ytPlayerRef.current.seekTo(resetTo, true);
+            ytPlayerRef.current.seekTo(maxSec, true);
           } catch {}
         } else if (audioRef.current) {
           audioRef.current.pause();
-          audioRef.current.currentTime = resetTo;
+          audioRef.current.currentTime = maxSec;
         }
 
-        setCurrentTime(resetTo);
+        setCurrentTime(maxSec);
         setIsPlaying(false);
         prevExternalIsPlayingRef.current = false;
         onPlayStateChangeRef.current?.(false);
@@ -533,12 +535,14 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       try {
         const state = yt.getPlayerState();
         if (state === 1) {
+          // Pause and keep the position reached
           yt.pauseVideo();
         } else {
           const maxSec = maxPlaySecondsRef.current;
           const minSec = startFromSecondsRef.current || 0;
           const cur = yt.getCurrentTime() || 0;
-          if (maxSec && cur >= maxSec) {
+          // If already at or beyond current max limit, restart from minSec to replay
+          if (maxSec && cur >= maxSec - 0.05) {
             yt.seekTo(minSec, true);
             setCurrentTime(minSec);
           } else if (cur < minSec) {
@@ -559,7 +563,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     if (audio.paused) {
       const maxSec = maxPlaySecondsRef.current;
       const minSec = startFromSecondsRef.current || 0;
-      if (maxSec && audio.currentTime >= maxSec) {
+      // If already at or beyond current max limit, restart from minSec to replay
+      if (maxSec && audio.currentTime >= maxSec - 0.05) {
         audio.currentTime = minSec;
         setCurrentTime(minSec);
       } else if (audio.currentTime < minSec) {
@@ -568,6 +573,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       }
       audio.play().catch(() => {});
     } else {
+      // Pause and keep the position reached
       audio.pause();
     }
   };
@@ -645,8 +651,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   };
 
-  const currentLimit = maxPlaySeconds || duration;
-  const progressPercent = Math.min(100, (currentTime / currentLimit) * 100);
+  const currentLimit = Math.max(0.1, maxPlaySeconds || duration);
+  const progressPercent = Math.min(100, Math.max(0, (currentTime / currentLimit) * 100));
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
@@ -659,15 +665,15 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
       {/* Visual Equalizer / Sound Waves */}
       {showEqualizer && (
-        <div className="flex items-center justify-between px-4 py-2 bg-[#361300] rounded-xl border border-[#6E2900]">
-          <div className="flex items-center gap-1.5 h-8">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2 bg-zinc-900 rounded-xl border border-zinc-700/80 overflow-hidden">
+          <div className="flex items-center gap-1 sm:gap-1.5 h-8 overflow-hidden">
             {[40, 70, 30, 90, 60, 100, 45, 80, 50, 95, 35, 75].map((height, i) => (
               <div
                 key={i}
-                className={`w-1.5 rounded-full transition-all duration-300 ${
+                className={`w-1 sm:w-1.5 rounded-full transition-all duration-300 ${
                   isPlaying
-                    ? 'bg-gradient-to-t from-amber-400 to-[#FF7700] animate-pulse'
-                    : 'bg-[#5A2400]'
+                    ? 'bg-gradient-to-t from-rose-500 via-pink-500 to-orange-400 animate-pulse'
+                    : 'bg-zinc-700'
                 }`}
                 style={{
                   height: isPlaying ? `${height}%` : '25%',
@@ -679,15 +685,15 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           </div>
 
           {/* Audio Source Badge */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0 ml-2">
             {isYouTube ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-red-950/70 text-red-300 border border-red-800/60 shadow-sm">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-red-950/70 text-red-300 border border-red-800/60 shadow-sm whitespace-nowrap">
                 <Youtube className="w-3 h-3 text-red-500" />
                 <span>YouTube Audio</span>
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-stone-900/70 text-stone-300 border border-[#6E2900] shadow-sm">
-                <Music className="w-3 h-3 text-amber-400" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700 shadow-sm whitespace-nowrap">
+                <Music className="w-3 h-3 text-rose-400" />
                 <span>iTunes Audio</span>
               </span>
             )}
@@ -695,15 +701,18 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         </div>
       )}
 
-      {/* Progress Bar */}
-      <div className="space-y-1.5">
-        <div className="relative h-2.5 w-full bg-[#2E1000] border border-[#6E2900] rounded-full overflow-hidden">
+      {/* Progress Bar (pure visual playback indicator, non-interactive) */}
+      <div className="space-y-1.5 select-none">
+        <div
+          id="audio-progress-bar-container"
+          className="relative h-2.5 w-full bg-zinc-900 border border-zinc-700 rounded-full overflow-hidden pointer-events-none"
+        >
           <div
-            className="h-full bg-gradient-to-r from-amber-400 via-[#FF7700] to-amber-300 rounded-full"
+            className="h-full bg-gradient-to-r from-rose-500 via-pink-500 to-orange-400 rounded-full will-change-[width]"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
-        <div className="flex justify-between text-xs font-mono text-orange-200/90 px-0.5">
+        <div className="flex justify-between text-xs font-mono text-zinc-400 px-0.5">
           <span>{currentTime.toFixed(1)}s</span>
           <span>{currentLimit.toFixed(1)}s max</span>
         </div>
@@ -711,16 +720,16 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
       {/* Player Controls */}
       {showControls && (
-        <div className="flex items-center justify-between gap-3 pt-1">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 sm:gap-3 pt-1">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               id="audio-play-toggle-btn"
               type="button"
               onClick={togglePlay}
-              className="flex items-center justify-center w-11 h-11 rounded-full bg-gradient-to-r from-amber-400 to-[#FF7700] hover:from-amber-300 hover:to-orange-500 text-stone-950 shadow-lg shadow-black/25 active:scale-95 transition-all cursor-pointer font-black"
+              className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-r from-rose-500 to-orange-400 hover:from-rose-400 hover:to-orange-300 text-white shadow-lg shadow-rose-950/40 active:scale-95 transition-all cursor-pointer font-black shrink-0"
               title={isPlaying ? 'Pause Snippet' : 'Play Snippet'}
             >
-              {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 ml-0.5 fill-current" />}
+              {isPlaying ? <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-current" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5 fill-current" />}
             </button>
 
             {maxPlaySeconds && (
@@ -728,10 +737,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 id="audio-restart-btn"
                 type="button"
                 onClick={restartSnippet}
-                className="flex items-center justify-center w-9 h-9 rounded-full bg-[#361300] hover:bg-[#521E00] text-stone-200 hover:text-white border border-[#8C3700] transition-colors cursor-pointer"
+                className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 transition-colors cursor-pointer shrink-0"
                 title="Restart snippet"
               >
-                <RotateCcw className="w-4 h-4" />
+                <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             )}
 
@@ -739,15 +748,16 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           </div>
 
           {/* Right Controls & Volume Slider */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {rightControls}
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center sm:gap-2">
               <button
                 id="audio-mute-btn"
                 type="button"
                 onClick={toggleMute}
-                className="text-orange-200 hover:text-white transition-colors cursor-pointer"
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer p-1"
+                title={isMuted ? 'Unmute' : 'Mute'}
               >
                 {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </button>
@@ -759,7 +769,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 step="0.05"
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
-                className="w-16 sm:w-20 h-1.5 accent-amber-400 bg-[#2E1000] rounded-lg cursor-pointer"
+                className="hidden sm:block w-20 h-1.5 accent-rose-500 bg-zinc-900 rounded-lg cursor-pointer"
+                title="Volume"
               />
             </div>
           </div>
@@ -767,7 +778,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       )}
 
       {hasError && (
-        <p className="text-xs text-amber-300 text-center">
+        <p className="text-xs text-rose-400 text-center">
           Audio stream is buffering or connecting... click Play to listen.
         </p>
       )}

@@ -17,15 +17,15 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   return (
-    <div className="w-full bg-[#471C00]/95 border border-[#8C3700]/70 rounded-2xl p-4 shadow-2xl flex flex-col gap-3">
-      <div className="flex items-center justify-between border-b border-[#8C3700]/50 pb-2.5">
+    <div className="w-full bg-zinc-800 border border-zinc-700 rounded-2xl p-4 shadow-xl flex flex-col gap-3">
+      <div className="flex items-center justify-between border-b border-zinc-700/80 pb-2.5">
         <div className="flex items-center gap-2">
-          <Trophy className="w-4 h-4 text-amber-300" />
-          <h4 className="text-xs font-bold uppercase tracking-wider text-orange-100">
+          <Trophy className="w-4 h-4 text-purple-400" />
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300">
             Live Scoreboard
           </h4>
         </div>
-        <span className="text-[11px] text-orange-200/80 font-mono">
+        <span className="text-[11px] text-zinc-400 font-mono">
           {players.length} Players
         </span>
       </div>
@@ -41,8 +41,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
               id={`leaderboard-player-${player.id}`}
               className={`flex items-center justify-between px-3 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all ${
                 isMe
-                  ? 'bg-[#5C2300] border-[#CC5500]/70 shadow-sm'
-                  : 'bg-[#361300] border-[#6E2900]'
+                  ? 'bg-purple-950/40 border-purple-500/50 shadow-sm'
+                  : 'bg-zinc-900 border-zinc-700'
               }`}
             >
               {/* Rank & Player Info */}
@@ -50,12 +50,12 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                 <span
                   className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold font-mono ${
                     rank === 1
-                      ? 'bg-amber-400 text-stone-950 font-black'
+                      ? 'bg-gradient-to-r from-rose-500 to-orange-400 text-white font-black'
                       : rank === 2
-                      ? 'bg-stone-200 text-stone-950 font-bold'
+                      ? 'bg-zinc-700 text-zinc-200 font-bold'
                       : rank === 3
-                      ? 'bg-amber-600 text-stone-950 font-bold'
-                      : 'bg-[#2E1000] text-orange-200/70 border border-[#6E2900]'
+                      ? 'bg-zinc-800 text-zinc-300 font-bold border border-zinc-600'
+                      : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
                   }`}
                 >
                   {rank}
@@ -66,7 +66,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                 </span>
 
                 <div className="flex items-center gap-1.5 truncate">
-                  <span className={`truncate font-semibold ${isMe ? 'text-amber-200' : 'text-stone-200'}`}>
+                  <span className={`truncate font-semibold ${isMe ? 'text-purple-200' : 'text-zinc-200'}`}>
                     {player.name}
                   </span>
                   {player.isHost && (
@@ -80,13 +80,13 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                 {showRoundStatus && (
                   <div>
                     {player.hasGuessedCorrect ? (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[11px] font-bold border border-emerald-500/30">
-                        <CheckCircle className="w-3 h-3 text-emerald-400" />
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-500/20 text-green-300 text-[11px] font-bold border border-green-500/40">
+                        <CheckCircle className="w-3 h-3 text-green-400" />
                         <span>+{player.roundScore || 0}</span>
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1 text-[11px] text-orange-200/60 font-mono">
-                        <Clock className="w-3 h-3 animate-spin text-amber-400" /> Guessing...
+                      <span className="flex items-center gap-1 text-[11px] text-zinc-400 font-mono">
+                        <Clock className="w-3 h-3 animate-spin text-rose-400" /> Guessing...
                       </span>
                     )}
                   </div>
@@ -96,7 +96,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                   <span className="font-mono font-bold text-white text-sm">
                     {player.score.toLocaleString()}
                   </span>
-                  <span className="text-[10px] text-orange-200/70 ml-1">pts</span>
+                  <span className="text-[10px] text-zinc-400 ml-1">pts</span>
                 </div>
               </div>
             </div>
