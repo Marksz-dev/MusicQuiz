@@ -16,6 +16,7 @@ import {
   Youtube,
   Timer,
   ArrowRight,
+  Radio,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Track, Player, RoundPayload, RoomStatus } from '../types/game';
@@ -71,9 +72,9 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
     onHostNextRoundRef.current = onHostNextRound;
   }, [onHostNextRound]);
 
-  // Reset progression tracker whenever entering active play, countdown, or lobby
+  // Reset progression tracker whenever entering active play, countdown, buffering, or lobby
   useEffect(() => {
-    if (roomStatus === 'playing' || roomStatus === 'countdown' || roomStatus === 'lobby') {
+    if (roomStatus === 'playing' || roomStatus === 'countdown' || roomStatus === 'buffering' || roomStatus === 'lobby') {
       hasProgressedRoundRef.current = null;
       setRevealCountdown(5);
     }
@@ -150,6 +151,30 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
       setTimeout(() => setGuessFeedback(null), 2500);
     }
   };
+
+  // 0. BUFFERING SCREEN (Waits for audio to buffer across all players so no one skips the start)
+  if (roomStatus === 'buffering') {
+    return (
+      <div className="w-full max-w-xl mx-auto py-20 px-4 flex flex-col items-center justify-center text-center animate-fade-in">
+        <div className="relative flex items-center justify-center">
+          <div className="w-24 h-24 rounded-full border-4 border-rose-500/20 border-t-rose-500 animate-spin" />
+          <div className="absolute flex items-center justify-center">
+            <Radio className="w-8 h-8 text-rose-400 animate-pulse" />
+          </div>
+        </div>
+        <h3 className="text-xl sm:text-2xl font-bold text-white mt-6">Buffering Song...</h3>
+        <p className="text-zinc-400 text-sm mt-1.5 max-w-md">
+          Waiting for the song to buffer across all players so everyone starts at second 0.
+        </p>
+        <div className="inline-flex items-center gap-2 mt-4 px-3 py-1 bg-zinc-800/80 rounded-full border border-zinc-700/60">
+          <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+          <span className="text-xs text-rose-300 font-mono">
+            Round {currentRoundPayload?.roundIndex || 1} of {currentRoundPayload?.totalRounds || 5}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   // 1. COUNTDOWN SCREEN
   if (isCountingDown || roomStatus === 'countdown') {

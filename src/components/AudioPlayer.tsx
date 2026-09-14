@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Play, Pause, Volume2, VolumeX, RotateCcw, Youtube, Music } from 'lucide-react';
 import { extractYouTubeId } from '../services/youtube';
+import { getPreloadedAudio } from '../services/audioPreloader';
 
 declare global {
   interface Window {
@@ -259,12 +260,16 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       if (syncTime) {
         const expected = (Date.now() - syncTime) / 1000;
         if (expected >= 0 && expected < 30) {
-          if (Math.abs(current - expected) > 0.5) {
+          // Never skip the first seconds of the song!
+          // Only correct drift if we are well into the track (expected >= 3s)
+          // or if drift is catastrophic (> 3.5s). This prevents guests from skipping the intro.
+          const tolerance = expected < 3 ? 3.5 : 1.2;
+          if (Math.abs(current - expected) > tolerance) {
             if (isYouTube && ytPlayerRef.current) {
               try {
                 ytPlayerRef.current.seekTo(expected, true);
               } catch {}
-            } else if (audioRef.current) {
+            } else if (audioRef.current && audioRef.current.readyState >= 3) {
               audioRef.current.currentTime = expected;
             }
           }
@@ -411,7 +416,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     setCurrentTime(initialSec);
     setIsPlaying(false);
 
-    const audio = new Audio(previewUrl);
+    const cachedAudio = getPreloadedAudio(previewUrl);
+    const audio = cachedAudio || new Audio(previewUrl);
     audio.preload = 'auto';
     audio.volume = isMutedRef.current ? 0 : volumeRef.current;
     audio.currentTime = initialSec;
@@ -420,6 +426,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     const onLoadedMetadata = () => {
       setDuration(audio.duration || 30);
     };
+
+    if (audio.readyState >= 1) {
+      setDuration(audio.duration || 30);
+    }
 
     const onError = (e: any) => {
       console.warn('Audio preview error:', e);
@@ -466,7 +476,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       audio.removeEventListener('ended', onAudioEnded);
       stopMonitor();
       audio.pause();
-      audio.src = '';
+      if (!cachedAudio) {
+        audio.src = '';
+      }
       audioRef.current = null;
     };
   }, [isYouTube, previewUrl]);
@@ -513,18 +525,40 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   // Synchronized playback trigger for multiplayer
   useEffect(() => {
     if (!synchronizedStartTime) return;
-    const expected = (Date.now() - synchronizedStartTime) / 1000;
-    if (expected >= 0 && expected < 30) {
-      if (isYouTube && ytPlayerRef.current) {
-        try {
-          ytPlayerRef.current.seekTo(expected, true);
-          ytPlayerRef.current.playVideo();
-        } catch {}
-      } else if (audioRef.current) {
-        audioRef.current.currentTime = expected;
-        audioRef.current.play().catch(() => {});
+
+    let timeoutId: number | null = null;
+
+    const playAtTime = () => {
+      const now = Date.now();
+      const expected = (now - synchronizedStartTime) / 1000;
+      if (expected >= 0 && expected < 30) {
+        // If the round just started (within the first 2.5 seconds), ALWAYS play from 0.0s
+        // so guests do not skip the opening notes/intro of the song
+        const targetPos = expected > 2.5 ? expected : 0;
+        if (isYouTube && ytPlayerRef.current) {
+          try {
+            ytPlayerRef.current.seekTo(targetPos, true);
+            ytPlayerRef.current.playVideo();
+          } catch {}
+        } else if (audioRef.current) {
+          audioRef.current.currentTime = targetPos;
+          audioRef.current.play().catch(() => {});
+        }
       }
+    };
+
+    const diff = synchronizedStartTime - Date.now();
+    if (diff > 0) {
+      // Start time is in the future (e.g. at the end of countdown)
+      timeoutId = window.setTimeout(playAtTime, diff);
+    } else {
+      // Start time is already reached or in progress
+      playAtTime();
     }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [synchronizedStartTime, isYouTube]);
 
   // Play / Pause toggle

@@ -43,7 +43,7 @@ export interface Player {
   joinedAt: number;
 }
 
-export type RoomStatus = 'lobby' | 'countdown' | 'playing' | 'round_reveal' | 'game_over';
+export type RoomStatus = 'lobby' | 'buffering' | 'countdown' | 'playing' | 'round_reveal' | 'game_over';
 
 export interface RoomSettings {
   genre: string;

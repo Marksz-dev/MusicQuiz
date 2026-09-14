@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { Player, Room, RoundPayload, Track, PlayerScoreEvent, RoomStatus } from '../types/game';
 import { getSupabaseClient } from '../services/supabase';
+import { preloadAndBufferTrack } from '../services/audioPreloader';
 
 export interface UseSupabaseRoomProps {
   roomCode: string;
@@ -56,6 +57,11 @@ export function useSupabaseRoom({
   const pendingMessagesRef = useRef<Array<{ event: string; payload: any }>>([]);
   const timerIntervalRef = useRef<number | null>(null);
   const countdownIntervalRef = useRef<number | null>(null);
+  const bufferTimeoutRef = useRef<number | null>(null);
+  const bufferedPlayersRef = useRef<Set<string>>(new Set());
+  const countdownStartedRoundRef = useRef<number | null>(null);
+  const triggerCountdownRef = useRef<((roundPayload: RoundPayload) => void) | null>(null);
+  const checkIfAllBufferedRef = useRef<((roundPayload: RoundPayload) => void) | null>(null);
 
   const isHostRef = useRef<boolean>(currentPlayer.isHost);
   const currentRoundPayloadRef = useRef<RoundPayload | null>(null);
@@ -96,6 +102,10 @@ export function useSupabaseRoom({
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
       countdownIntervalRef.current = null;
+    }
+    if (bufferTimeoutRef.current) {
+      clearTimeout(bufferTimeoutRef.current);
+      bufferTimeoutRef.current = null;
     }
   }, []);
 
@@ -224,10 +234,10 @@ export function useSupabaseRoom({
     (event: string, payload: any) => {
       switch (event) {
         case 'ROUND_PREPARE': {
-          // 3-second synchronized countdown before audio plays
+          // Preload and buffer audio across all devices before countdown begins
           clearTimers();
-          setRoomStatus('countdown');
-          setIsCountingDown(true);
+          setRoomStatus('buffering');
+          setIsCountingDown(false);
           setCountdownSeconds(3);
           setHasGuessedCorrect(false);
           setAvailableScore(1000);
@@ -247,7 +257,51 @@ export function useSupabaseRoom({
           playersRef.current = resetList;
           setPlayers(resetList);
 
-          // Local countdown tick
+          // Reset buffer tracking for this round
+          bufferedPlayersRef.current.clear();
+          countdownStartedRoundRef.current = null;
+
+          // Immediately preload and buffer the track
+          preloadAndBufferTrack(payload.track).then(() => {
+            if (isHostRef.current) {
+              bufferedPlayersRef.current.add(currentPlayer.id);
+              checkIfAllBufferedRef.current?.(payload);
+            } else {
+              broadcastMessage('PLAYER_BUFFER_READY', {
+                playerId: currentPlayer.id,
+                roundIndex: payload.roundIndex,
+              });
+            }
+          });
+
+          // Host fallback safety timer: if a guest has a slower network, don't block indefinitely (max 3.5s)
+          if (isHostRef.current) {
+            bufferTimeoutRef.current = window.setTimeout(() => {
+              triggerCountdownRef.current?.(payload);
+            }, 3500);
+          }
+          break;
+        }
+
+        case 'PLAYER_BUFFER_READY': {
+          if (!isHostRef.current) break;
+          const { playerId, roundIndex } = payload;
+          if (currentRoundPayloadRef.current?.roundIndex === roundIndex) {
+            bufferedPlayersRef.current.add(playerId);
+            checkIfAllBufferedRef.current?.(currentRoundPayloadRef.current);
+          }
+          break;
+        }
+
+        case 'ROUND_START_COUNTDOWN': {
+          clearTimers();
+          setRoomStatus('countdown');
+          setIsCountingDown(true);
+          setCountdownSeconds(3);
+          setCurrentRoundPayload(payload);
+          currentRoundPayloadRef.current = payload;
+
+          // Synchronized countdown before audio begins
           let cd = 3;
           countdownIntervalRef.current = window.setInterval(() => {
             cd -= 1;
@@ -393,7 +447,17 @@ export function useSupabaseRoom({
           break;
       }
     },
-    [clearTimers, onRoundStart, onRoundEnd, onGameOver, startRoundTimer, endRound]
+    [
+      clearTimers,
+      onRoundStart,
+      onRoundEnd,
+      onGameOver,
+      startRoundTimer,
+      endRound,
+      broadcastMessage,
+      currentPlayer.id,
+      checkAndEndRoundIfAllGuessed,
+    ]
   );
 
   // Connect to Supabase Realtime channel + Fallback BroadcastChannel
@@ -763,18 +827,63 @@ export function useSupabaseRoom({
     checkAndEndRoundIfAllGuessed,
   ]);
 
-  // Host: Prepare and start next round
+  // Host: Trigger synchronized countdown after buffering completes (or fallback timeout)
+  const triggerCountdown = useCallback(
+    (roundPayload: RoundPayload) => {
+      if (!isHostRef.current) return;
+      if (bufferTimeoutRef.current) {
+        clearTimeout(bufferTimeoutRef.current);
+        bufferTimeoutRef.current = null;
+      }
+      if (countdownStartedRoundRef.current === roundPayload.roundIndex) return;
+      countdownStartedRoundRef.current = roundPayload.roundIndex;
+
+      // Start time is set 3.0s into the future for synchronized countdown
+      const startTime = Date.now() + 3000;
+      const finalizedPayload: RoundPayload = {
+        ...roundPayload,
+        startTime,
+      };
+
+      handleBroadcastEvent('ROUND_START_COUNTDOWN', finalizedPayload);
+      broadcastMessage('ROUND_START_COUNTDOWN', finalizedPayload);
+    },
+    [broadcastMessage, handleBroadcastEvent]
+  );
+
+  const checkIfAllBufferedAndStartCountdown = useCallback(
+    (roundPayload: RoundPayload) => {
+      if (!isHostRef.current) return;
+      const activePlayers = playersRef.current;
+      const allBuffered =
+        activePlayers.length === 0 ||
+        activePlayers.every((p) => bufferedPlayersRef.current.has(p.id));
+
+      if (allBuffered) {
+        triggerCountdown(roundPayload);
+      }
+    },
+    [triggerCountdown]
+  );
+
+  useEffect(() => {
+    triggerCountdownRef.current = triggerCountdown;
+  }, [triggerCountdown]);
+
+  useEffect(() => {
+    checkIfAllBufferedRef.current = checkIfAllBufferedAndStartCountdown;
+  }, [checkIfAllBufferedAndStartCountdown]);
+
+  // Host: Prepare and start next round (waits for song to buffer before playing)
   const startNextRound = useCallback(
     (roundIndex: number, totalRounds: number, track: Track) => {
       if (!isHostRef.current) return;
 
-      // Start time is set 3.2 seconds into the future for countdown buffer
-      const startTime = Date.now() + 3200;
       const payload: RoundPayload = {
         roundIndex,
         totalRounds,
         track,
-        startTime,
+        startTime: 0,
         duration: 30,
       };
 
