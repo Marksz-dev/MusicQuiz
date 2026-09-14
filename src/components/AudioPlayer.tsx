@@ -724,8 +724,40 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
             ))}
           </div>
 
-          {/* Audio Source Badge */}
-          <div className="flex items-center gap-1 shrink-0 ml-2">
+          {/* Right Section: Desktop Volume Controls & Audio Source Badge */}
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 ml-2">
+            {!showControls && (
+              <div
+                id="audio-multiplayer-volume-control"
+                className="hidden sm:flex items-center gap-1.5 bg-zinc-800/90 hover:bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-700/60 shadow-sm transition-colors"
+              >
+                <button
+                  id="audio-header-mute-btn"
+                  type="button"
+                  onClick={toggleMute}
+                  className="text-zinc-400 hover:text-white transition-colors cursor-pointer p-0.5"
+                  title={isMuted ? 'Unmute' : 'Mute'}
+                >
+                  {isMuted || volume === 0 ? (
+                    <VolumeX className="w-3.5 h-3.5 text-zinc-400" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5 text-rose-400" />
+                  )}
+                </button>
+                <input
+                  id="audio-header-volume-slider"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  className="w-16 md:w-20 h-1.5 accent-rose-500 bg-zinc-950 rounded-lg cursor-pointer"
+                  title="Volume"
+                />
+              </div>
+            )}
+
             {isYouTube ? (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-red-950/70 text-red-300 border border-red-800/60 shadow-sm whitespace-nowrap">
                 <Youtube className="w-3 h-3 text-red-500" />
