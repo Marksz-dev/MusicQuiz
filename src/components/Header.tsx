@@ -21,14 +21,9 @@ export const Header: React.FC<HeaderProps> = ({
             <Music2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div className="flex flex-col">
-            <div className="flex items-center gap-1.5">
-              <span className="font-black text-base sm:text-lg tracking-tight text-white font-sans">
-                SongFight
-              </span>
-              <span className="text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 font-bold border border-rose-500/40 tracking-wider">
-                LIVE
-              </span>
-            </div>
+            <span className="font-black text-base sm:text-lg tracking-tight text-white font-sans">
+              SongFight
+            </span>
             <span className="text-[11px] text-zinc-400 -mt-1 hidden md:inline">
               Interactive Music Guessing
             </span>
